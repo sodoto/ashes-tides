@@ -1,0 +1,1624 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A dice duel for your phone: roll five dice, defend, upgrade abilities and beat the AI.">
+<meta name="theme-color" content="#141a2b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ashes &amp; Tides">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Ashes &amp; Tides</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow+Semi+Condensed:wght@400;500;600&family=Grenze+Gotisch:wght@600;800&display=swap">
+<style>
+/* Layout: one phone-width column. Opponent on top, a shared walnut dice tray in the middle, my abilities and hand at the bottom. */
+:root{
+  color-scheme:dark;
+  --felt:#141a2b; --felt-hi:#1f2a47; --panel:#1a2238; --panel-hi:#252f4b; --line:rgba(255,255,255,.09);
+  --text:#ece7dc; --muted:#9aa3b8;
+  --walnut:#42301f; --walnut-lo:#2c2016;
+  --bone:#efe6d0; --bone-lo:#c9b98f;
+  --gold:#e3b34f; --gold-ink:#2a1d05;
+  --ember:#f0803f; --brine:#5cc6ba;
+  --t-main:#6b9bf2; --t-roll:#ec9a4f; --t-instant:#ec6a62; --t-upgrade:#b48cf0;
+  --bad:#e8574f; --good:#6fcf8f; --shieldc:#9cc4ff; --chillc:#9ad7ff;
+  --display:'Grenze Gotisch','Iowan Old Style',Georgia,serif;
+  --body:'Barlow Semi Condensed','Segoe UI',system-ui,sans-serif;
+  --num:'Barlow Condensed','Arial Narrow',sans-serif;
+}
+*{box-sizing:border-box}
+html{background:var(--felt)}
+html,body{height:100%}
+body{
+  margin:0;background-color:var(--felt);color:var(--text);
+  background-image:radial-gradient(130% 60% at 50% 0%,var(--felt-hi),transparent 72%);background-repeat:no-repeat;
+  font-family:var(--body);font-size:15px;line-height:1.3;-webkit-tap-highlight-color:transparent;
+  padding-block:8px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+#app{max-width:460px;margin:0 auto;min-height:100%}
+.game{display:flex;flex-direction:column;gap:8px;min-height:100%}
+
+/* panels */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:9px 11px 8px;display:grid;gap:7px;position:relative}
+.panel.active{border-color:color-mix(in srgb,var(--hc) 75%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--hc) 35%,transparent)}
+.panel.opp{cursor:pointer}
+.p-top{display:flex;align-items:center;gap:9px;min-width:0}
+.sigil{flex:none}
+.p-id{flex:1;min-width:0}
+.p-name{font-family:var(--display);font-weight:800;font-size:19px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p-sub{font-size:12px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-top:2px}
+.chips{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.chip{border:0;cursor:pointer;display:inline-flex;align-items:center;gap:3px;padding:2px 8px 2px 5px;border-radius:999px;background:rgba(255,255,255,.08);font:700 13px var(--num);letter-spacing:.03em}
+.chip.burn{color:var(--ember)} .chip.boost{color:var(--gold);background:rgba(227,179,79,.16)} .chip.chill{color:var(--chillc)} .chip.shield{color:var(--shieldc)}
+.hpbar{position:relative;height:22px;border-radius:7px;background:#0e1424;overflow:hidden}
+.hpfill{display:block;height:100%;background:var(--hc);transition:width .6s ease}
+.hpnum{position:absolute;inset:0;display:flex;align-items:center;padding-left:9px;font:700 16px var(--num);text-shadow:0 1px 3px rgba(0,0,0,.7)}
+.hpnum small{font-size:12px;opacity:.7;margin-left:1px}
+.p-bot{display:flex;justify-content:space-between;align-items:center;font:600 13px var(--num);color:var(--muted);letter-spacing:.04em}
+.cp{display:flex;align-items:center;gap:5px}
+.gem{display:inline-block;width:9px;height:9px;border-radius:2px;transform:rotate(45deg);background:rgba(255,255,255,.12)}
+.gem.on{background:var(--gold)}
+.cpn{margin-left:6px;color:var(--text)}
+.fxnum{position:absolute;right:16px;top:8px;font:700 28px var(--num);pointer-events:none;text-shadow:0 2px 8px rgba(0,0,0,.7);animation:floatup 1.2s ease-out forwards}
+.fxnum.dmg{color:var(--bad)} .fxnum.burn{color:var(--ember)} .fxnum.heal{color:var(--good)} .fxnum.shield{color:var(--shieldc)}
+@keyframes floatup{0%{opacity:0;transform:translateY(6px)}15%{opacity:1}100%{opacity:0;transform:translateY(-26px)}}
+
+/* log row */
+.logrow{display:flex;align-items:center;gap:8px}
+.logline{flex:1;min-width:0;min-height:36px;display:flex;flex-direction:column;justify-content:center;gap:1px;background:none;border:0;padding:0 2px;text-align:left;cursor:pointer;font-size:13px;color:var(--muted)}
+.logline span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.logline span:last-child{color:var(--text)}
+.menubtn{flex:none;min-height:36px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);font:600 13px var(--body);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);cursor:pointer}
+
+/* dice tray */
+.table{background:linear-gradient(var(--walnut),var(--walnut-lo));border-radius:16px;padding:10px 12px 14px;display:grid;gap:10px;box-shadow:inset 0 3px 12px rgba(0,0,0,.55),0 1px 0 rgba(255,255,255,.06)}
+.t-head{display:flex;justify-content:space-between;align-items:center;font:600 12px var(--body);letter-spacing:.07em;text-transform:uppercase;color:#d8c6a6}
+.pips{display:flex;gap:5px;align-items:center}
+.pip{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.2)}
+.pip.on{background:var(--gold)}
+.dice{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;padding-bottom:18px}
+.die{aspect-ratio:1;border:0;border-radius:13px;background:linear-gradient(160deg,#f7efda,var(--bone) 55%,#dccfae);color:var(--dink,#333);display:grid;place-items:center;position:relative;padding:0;cursor:pointer;
+  box-shadow:0 4px 0 var(--bone-lo),0 9px 14px rgba(0,0,0,.45);transition:transform .15s,box-shadow .15s}
+.die svg{width:58%;height:58%}
+.die[disabled]{cursor:default}
+.die.blank{background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 2px rgba(255,255,255,.13)}
+.die.held{transform:translateY(-6px);box-shadow:0 0 0 3px var(--gold),0 4px 0 var(--bone-lo),0 12px 14px rgba(0,0,0,.4)}
+.die .keep{position:absolute;left:0;right:0;bottom:-22px;text-align:center;font:700 11px var(--num);letter-spacing:.14em;color:var(--gold)}
+.die.tgt{animation:pulse 1s ease-in-out infinite}
+.die.pick{box-shadow:0 0 0 3px #fff,0 4px 0 var(--bone-lo),0 12px 14px rgba(0,0,0,.4);transform:translateY(-6px)}
+.die.tumble{animation:tumble .5s cubic-bezier(.2,.8,.3,1)}
+@keyframes tumble{0%{transform:translateY(-16px) rotate(-190deg) scale(.75);opacity:.2}60%{transform:translateY(2px) rotate(10deg) scale(1.06);opacity:1}100%{transform:none}}
+@keyframes pulse{50%{transform:translateY(-3px)}}
+
+/* turn steps */
+.steps{display:flex;gap:4px;margin:0;padding:0;list-style:none}
+.steps li{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:5px 2px;border-radius:8px;background:rgba(0,0,0,.2);color:#b3a186;font:600 12px var(--body);letter-spacing:.05em;text-transform:uppercase}
+.steps li b{display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;background:rgba(255,255,255,.12);font:700 11px var(--num);letter-spacing:0}
+.steps li.cur{background:var(--gold);color:var(--gold-ink)}
+.steps li.cur b{background:rgba(0,0,0,.2)}
+.steps li.done{opacity:.55}
+
+/* actions */
+.actions{display:flex;gap:8px}
+.actions.wait{min-height:48px;align-items:center;justify-content:center;color:var(--muted);font-weight:500}
+.btn{flex:1;min-height:48px;border-radius:12px;border:1px solid var(--line);background:var(--panel-hi);font:600 16px var(--body);padding:0 14px;display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+.btn.primary{background:var(--gold);color:var(--gold-ink);border-color:transparent}
+.btn[disabled]{opacity:.4;cursor:default}
+.btn .n{font:700 13px var(--num);opacity:.7;letter-spacing:.04em}
+.hint{margin:0;font-size:13px;color:var(--muted);text-align:center}
+.tbar{display:grid;gap:8px}
+.faces-pick{display:flex;gap:8px;justify-content:center}
+.fbtn{width:52px;height:52px;border-radius:12px;border:0;background:var(--bone);color:var(--dink,#333);display:grid;place-items:center;cursor:pointer}
+
+/* abilities */
+.abilities{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 6px;margin-inline:-2px;scroll-snap-type:x proximity}
+.ab{flex:0 0 130px;scroll-snap-align:start;display:grid;gap:5px;align-content:start;text-align:left;min-height:82px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 9px;cursor:pointer}
+.ab .nm{font-family:var(--display);font-weight:800;font-size:16px;line-height:1.05}
+.ab .nm i{font:700 10px var(--num);letter-spacing:.12em;color:var(--gold);margin-left:5px;font-style:normal;vertical-align:2px}
+.ab .rq{display:flex;gap:2px;flex-wrap:wrap;color:var(--hc)}
+.ab .rq svg{width:15px;height:15px;opacity:.8}
+.ab.live .rq svg{opacity:.25}
+.ab.live .rq svg.have{opacity:1}
+.ab .ef{font:600 13px var(--num);letter-spacing:.02em;color:var(--muted)}
+.ab.ok{border-color:var(--gold);background:#2a2d3b}
+.ab.ok .ef{color:var(--text)}
+.ab.sel{outline:2px solid var(--gold);background:#3a3520}
+
+/* hand */
+.handwrap{position:relative;margin-top:auto}
+.hand{display:flex;gap:8px;overflow-x:auto;padding:10px 2px 6px;margin-inline:-2px}
+.card{flex:0 0 110px;height:134px;border-radius:12px;background:linear-gradient(#2c3658,#1f2744);border:1px solid var(--line);padding:8px;display:grid;grid-template-rows:auto auto 1fr auto;gap:3px;text-align:left;position:relative;cursor:pointer;transition:transform .15s}
+.card .ci{color:var(--gold)}
+.card .cc{position:absolute;right:7px;top:7px;width:22px;height:22px;border-radius:50%;background:var(--gold);color:var(--gold-ink);font:700 14px var(--num);display:grid;place-items:center}
+.card .cn{font-family:var(--display);font-weight:800;font-size:16px;line-height:1.02}
+.card .ct{font-size:12px;line-height:1.2;color:#c3c9d8;overflow:hidden}
+.card .cw{font:700 10px var(--num);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.card .cw.roll{color:var(--gold)} .card .cw.react{color:var(--brine)}
+.card.dim{opacity:.5}
+.card.sel{transform:translateY(-9px);border-color:var(--gold);opacity:1}
+.pop{position:absolute;left:0;right:0;bottom:calc(100% - 4px);z-index:5;background:#0f1529;border:1px solid var(--gold);border-radius:14px;padding:12px;display:grid;gap:8px;box-shadow:0 14px 32px rgba(0,0,0,.65)}
+.pop h3{margin:0;font-family:var(--display);font-weight:800;font-size:21px;line-height:1}
+.pop p{margin:0;color:#c3c9d8}
+.pop .why{color:var(--gold);font-weight:600}
+
+/* rules-era additions */
+.cp{display:flex;align-items:center;gap:7px;background:none;border:0;padding:4px 0;cursor:pointer;font:inherit;color:inherit}
+.cpbar{display:block;width:84px;height:7px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden}
+.cpbar i{display:block;height:100%;background:var(--gold);transition:width .4s}
+.cpn{margin-left:0}
+.fxnum.cp{color:var(--gold);font-size:22px}
+.die .num{position:absolute;right:6px;top:4px;font:700 11px var(--num);color:var(--dink,#333);opacity:.75}
+.die.blank .num{display:none}
+.tlabel{display:flex;justify-content:space-between;align-items:center;margin-top:-2px;font:600 12px var(--body);letter-spacing:.06em;text-transform:uppercase;color:#d8c6a6}
+.table.defmode{box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--hc) 70%,transparent),inset 0 3px 12px rgba(0,0,0,.55)}
+.msg{margin:0;font-size:15px;line-height:1.35;color:var(--text)}
+.msg b{color:var(--gold)}
+.actions{flex-wrap:wrap}
+.actions .btn{min-width:0}
+.ab .rq .st{display:flex;gap:2px}
+.ab .rq .st b,.rq.big .st b{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:4px;background:rgba(255,255,255,.12);font:700 10px var(--num);color:var(--text);opacity:.55}
+.ab .rq .st b.have{background:var(--hc);color:#111;opacity:1}
+.ab.live .rq .st b:not(.have){opacity:.3}
+.rq.big .st b{width:26px;height:26px;font-size:15px;opacity:1}
+.ab .nm i + i{margin-left:3px}
+.ab.up{border-color:color-mix(in srgb,var(--t-upgrade) 55%,transparent)}
+.ab.up .nm i:first-child{color:var(--t-upgrade)}
+.ab.def{border-style:dashed;border-color:color-mix(in srgb,var(--hc) 60%,transparent)}
+.ab.def .nm i{color:var(--hc)}
+.abrow .rq{font:700 13px var(--num);align-items:center}
+small.ult{color:var(--gold);font:700 10px var(--num);letter-spacing:.12em}
+.card{border-top:3px solid var(--tc,var(--line))}
+.card.t-main{--tc:var(--t-main)} .card.t-roll{--tc:var(--t-roll)} .card.t-instant{--tc:var(--t-instant)} .card.t-upgrade{--tc:var(--t-upgrade)}
+.card .cw{color:var(--tc)}
+.card.t-upgrade .ci{color:var(--t-upgrade)}
+.cardhead.t-main .ci{color:var(--t-main)} .cardhead.t-roll .ci{color:var(--t-roll)} .cardhead.t-instant .ci{color:var(--t-instant)} .cardhead.t-upgrade .ci{color:var(--t-upgrade)}
+.tline{font:600 13px var(--body);letter-spacing:.02em;margin:0}
+.tline.t-main{color:var(--t-main)} .tline.t-roll{color:var(--t-roll)} .tline.t-instant{color:var(--t-instant)} .tline.t-upgrade{color:var(--t-upgrade)}
+.types{list-style:none;padding:0!important;display:grid;gap:6px}
+.types li{padding-left:10px;border-left:3px solid var(--tc)}
+.types li b{color:var(--tc);margin-right:6px}
+.types .t-main{--tc:var(--t-main)} .types .t-roll{--tc:var(--t-roll)} .types .t-instant{--tc:var(--t-instant)} .types .t-upgrade{--tc:var(--t-upgrade)}
+.fbtn{position:relative;width:48px;height:52px}
+.fbtn small,.mf small{position:absolute;right:4px;top:2px;font:700 10px var(--num);opacity:.7}
+.mf{position:relative}
+.faces-pick{flex-wrap:wrap}
+.dd i{position:relative}
+.dd i small{position:absolute;right:1px;top:-1px;font:700 8px var(--num);color:var(--ink);margin:0}
+
+/* history */
+.hist-btn{color:var(--text);border-color:color-mix(in srgb,var(--gold) 45%,transparent)}
+.sheethead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.btn.small{flex:none;min-height:40px;font-size:15px}
+.hist{display:grid;gap:14px}
+.turn{border-left:3px solid var(--hc);padding-left:11px;display:grid;gap:6px}
+.turn h4{margin:0;display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 10px;font:700 13px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--hc)}
+.turn h4 span{color:var(--muted);font:600 13px var(--num);letter-spacing:.04em}
+.turn ul{margin:0;padding:0;list-style:none;display:grid;gap:5px}
+.ev{font-size:14px;line-height:1.3}
+.ev.sys{color:var(--muted)}
+.ev.big{font-weight:600}
+.dd{display:flex;align-items:center;gap:3px;margin-top:4px}
+.dd i{width:24px;height:24px;border-radius:6px;background:var(--bone);color:var(--ink);display:grid;place-items:center}
+.dd small{margin-left:6px;font:600 12px var(--num);color:var(--muted);letter-spacing:.04em}
+
+/* keyword explanations */
+.gloss{display:grid;gap:6px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.05)}
+.gloss p{font-size:14px;color:#c3c9d8}
+.gloss b{color:var(--gold)}
+.rq.big{display:flex;gap:5px;color:var(--hc)}
+.rq.big svg{width:26px;height:26px}
+
+/* card sheet */
+.cardhead{display:flex;align-items:center;gap:10px}
+.cardhead h2{flex:1}
+.cardhead .ci{color:var(--gold);display:grid}
+.cc.big{font:700 20px var(--num);color:var(--gold)}
+.cardtext{font-size:18px}
+.sheet .when{color:var(--muted);font-size:14px}
+.sheet .why{color:var(--gold);font-weight:600}
+
+/* sheets */
+.back{position:fixed;inset:0;background:rgba(5,8,18,.64);z-index:20}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;max-height:88%;overflow:auto;background:#161d33;border-top:1px solid var(--line);border-radius:18px 18px 0 0;
+  padding-top:16px;padding-bottom:calc(18px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));box-shadow:0 -14px 40px rgba(0,0,0,.5)}
+.sheet .in{max-width:460px;margin:0 auto;display:grid;gap:12px}
+.sheet h2{margin:0;font-family:var(--display);font-weight:800;font-size:28px;line-height:1}
+.sheet h3{margin:6px 0 0;font:700 13px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.sheet p{margin:0}
+.sheet ol,.sheet ul{margin:0;padding-left:20px;display:grid;gap:6px}
+.abl{display:grid;gap:6px}
+.abrow{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:8px 10px;border-radius:10px;background:var(--panel);align-items:center}
+.abrow .nm{font-family:var(--display);font-weight:800;font-size:17px}
+.abrow .rq{display:flex;gap:2px;justify-content:flex-end;color:var(--hc)}
+.abrow .rq svg{width:15px;height:15px}
+.abrow .ef{grid-column:1/-1;font:600 13px var(--num);color:var(--muted);letter-spacing:.02em}
+.facesrow{display:flex;gap:6px}
+.mf{width:34px;height:34px;border-radius:8px;background:var(--bone);color:var(--ink,#333);display:grid;place-items:center}
+.menulist{display:grid;gap:8px}
+.logfull{display:grid;gap:5px;font-size:14px}
+.logfull div{padding:5px 8px;border-radius:8px;background:rgba(255,255,255,.04)}
+.rc{display:grid;grid-template-columns:1fr auto;gap:2px 10px;text-align:left;padding:10px 12px;border-radius:12px;border:1px solid var(--gold);background:#242a3f;cursor:pointer}
+.rc[disabled]{opacity:.4;cursor:default;border-color:var(--line)}
+.rc .cn{font-family:var(--display);font-weight:800;font-size:17px}
+.rc .cc{font:700 14px var(--num);color:var(--gold)}
+.rc .ct{grid-column:1/-1;font-size:13px;color:#c3c9d8}
+.over h2{font-size:48px}
+.over .win{color:var(--gold)} .over .lose{color:var(--bad)}
+
+/* start screen */
+.start{display:grid;gap:18px;padding-block:14px 18px}
+.logo{margin:0;font-family:var(--display);font-weight:800;font-size:clamp(46px,14vw,68px);line-height:.9}
+.logo span{color:var(--gold)}
+.tag{margin:10px 0 0;color:var(--muted);font-size:16px;max-width:34ch}
+.heroes{display:grid;gap:12px}
+.hero{display:grid;gap:11px;text-align:left;background:linear-gradient(160deg,color-mix(in srgb,var(--hc) 22%,#1a2238),#1a2238 62%);border:1px solid color-mix(in srgb,var(--hc) 50%,transparent);border-radius:16px;padding:14px;cursor:pointer}
+.hero .hh{display:flex;align-items:center;gap:12px}
+.hero .hn{font-family:var(--display);font-weight:800;font-size:29px;line-height:1}
+.hero .he{color:var(--muted);font-size:14px;margin-top:3px}
+.hero .hs{margin:0;font-size:15px}
+.hero .go{font:700 14px var(--num);letter-spacing:.1em;text-transform:uppercase;color:var(--hc)}
+.resume{display:grid;gap:5px;text-align:left;padding:14px;border-radius:16px;border:2px solid var(--gold);background:linear-gradient(160deg,color-mix(in srgb,var(--hc) 20%,#1a2238),#1a2238 70%);cursor:pointer}
+.resume .rk{font:700 12px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--gold)}
+.resume .rt{font-family:var(--display);font-weight:800;font-size:25px;line-height:1.05}
+.resume .rt i{font-style:normal;color:var(--muted);font-size:18px}
+.resume .rs{color:var(--muted);font-size:15px}
+.resume .rh{display:flex;gap:12px;font:700 16px var(--num);letter-spacing:.03em;color:var(--muted)}
+.resume .go{margin-top:4px;font:700 15px var(--num);letter-spacing:.1em;text-transform:uppercase;color:var(--gold)}
+.newduel{margin:0;font:700 13px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.start-foot{display:flex;justify-content:space-between;align-items:center}
+.linkbtn{background:none;border:0;padding:8px 0;color:var(--gold);font:600 15px var(--body);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.rec{font:600 14px var(--num);letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+.proto{margin:0;font-size:13px;color:var(--muted)}
+
+/* desktop: side history hidden on phones */
+.side{display:none}
+.sidehead{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.sidehead h3{margin:0;font:700 13px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.sidehead span{font-size:12px;color:var(--muted)}
+@media (min-width:1000px){
+  #app{max-width:1320px}
+  .game{display:grid;grid-template-columns:minmax(360px,1fr) minmax(0,1.3fr) 320px;
+    grid-template-areas:"opp opp log" "tray abil side" "me me side" "hand hand side";gap:12px 14px;align-items:start;align-content:start;min-height:0}
+  .panel.opp{grid-area:opp} .logrow{grid-area:log;justify-content:flex-end;align-self:stretch}
+  .table{grid-area:tray} .abilities{grid-area:abil} .panel.me{grid-area:me} .handwrap{grid-area:hand;margin-top:0}
+  .side{grid-area:side;display:grid;gap:10px;align-content:start;contain:size;align-self:stretch;min-height:420px;overflow:auto;
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+  .side .ev{font-size:13px}
+  .logline,.hist-btn{display:none}
+  .abilities{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));overflow:visible;padding:0;margin:0;align-content:start;scroll-snap-type:none}
+  .ab{min-height:78px}
+  .hand{flex-wrap:wrap;overflow:visible;padding:4px 0 0;margin:0}
+  .card{flex:0 0 136px;height:160px}
+  .card .ct{font-size:13px}
+  .card:hover:not(.dim){transform:translateY(-4px)}
+  .ab:hover,.btn:hover:not([disabled]){filter:brightness(1.08)}
+  .sheet{left:50%;right:auto;bottom:auto;top:50%;transform:translate(-50%,-50%);width:min(580px,92vw);max-height:86vh;
+    border:1px solid var(--line);border-radius:18px;padding:20px 24px}
+  .start{max-width:980px;margin:0 auto;padding-top:28px}
+  .heroes{grid-template-columns:1fr 1fr}
+  .tag{max-width:none}
+}
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 10px);transform:translate(-50%,-14px);width:max-content;max-width:min(92vw,420px);background:#0b1124;border:1px solid var(--gold);color:var(--text);padding:9px 14px;border-radius:12px;font-weight:600;text-align:center;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:40}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.001s!important;transition-duration:.001s!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script>
+'use strict';
+/* ===== ENGINE: pure rules and AI, no DOM. ===== */
+const START_HP = 50, MAX_HP = 60, START_CP = 2, MAX_CP = 15, HAND_LIMIT = 6, MAX_SHIELD = 10, MAX_BURN = 3, START_HAND = 4, DICE = 5;
+const SAVE_VERSION = 2;
+
+const HEROES = {
+  ember: {
+    id: 'ember', name: 'Ember Duelist', epithet: 'Burns bright, burns fast',
+    style: 'Aggressive. Stacks Burn and hits back when attacked.',
+    color: '#f0803f', ink: '#b4431c',
+    faces: ['blade', 'blade', 'flame', 'flame', 'cinder', 'crest'],
+    abilities: [
+      { id: 'quickCut', name: 'Quick Cut', req: { blade: 3 }, lv: [{ dmg: 4 }, { dmg: 6 }] },
+      { id: 'kindle', name: 'Kindle', req: { flame: 3 }, lv: [{ dmg: 3, burn: 1 }] },
+      { id: 'emberTrail', name: 'Ember Trail', req: { blade: 1, flame: 1, cinder: 1 }, lv: [{ dmg: 3, burn: 1, draw: 1 }] },
+      { id: 'scorchStep', name: 'Scorch Step', req: { blade: 2, flame: 2 }, lv: [{ dmg: 5, cp: 1 }, { dmg: 7, cp: 2 }] },
+      { id: 'blazingFlurry', name: 'Blazing Flurry', straight: 4, lv: [{ dmg: 7, burn: 1 }] },
+      { id: 'twinStrike', name: 'Twin Strike', req: { blade: 4 }, lv: [{ dmg: 8 }, { dmg: 10, undef: true }] },
+      { id: 'infernalDance', name: 'Infernal Dance', straight: 5, lv: [{ dmg: 10, burn: 2, undef: true }] },
+      { id: 'wildfire', name: 'Wildfire', req: { flame: 5 }, lv: [{ dmg: 11, burn: 3 }] },
+      { id: 'phoenixRite', name: 'Phoenix Rite', req: { crest: 5 }, ult: true, lv: [{ dmg: 15, burn: 3, heal: 5 }] },
+    ],
+    defense: {
+      id: 'riposte', name: 'Riposte', lv: [{ n: 4 }, { n: 5 }],
+      text: 'Deal 2 damage back for each Blade. With 2 or more Flame, the attacker gets 1 Burn.',
+      resolve(sym) { return { counter: 2 * (sym.blade || 0), burn: (sym.flame || 0) >= 2 ? 1 : 0 }; },
+    },
+    deck: { secondWind: 2, loadedDie: 1, jinx: 2, ironResolve: 1, parry: 2, scoutAhead: 1, quickBandage: 1, cheapShot: 1, fanFlames: 2, powderKeg: 1, whetstone: 2,
+      up_quickCut: 1, up_scorchStep: 1, up_twinStrike: 1, up_riposte: 1 },
+  },
+  brine: {
+    id: 'brine', name: 'Brine Oracle', epithet: 'Patient as the tide',
+    style: 'Defensive. Shields, heals and slows you down.',
+    color: '#5cc6ba', ink: '#17636e',
+    faces: ['wave', 'wave', 'shell', 'shell', 'pearl', 'eye'],
+    abilities: [
+      { id: 'ripple', name: 'Ripple', req: { wave: 3 }, lv: [{ dmg: 4, shield: 1 }, { dmg: 6, shield: 2 }] },
+      { id: 'tidalMend', name: 'Tidal Mend', req: { shell: 3 }, lv: [{ heal: 4, shield: 1 }] },
+      { id: 'brinePair', name: 'Brine Pair', req: { wave: 2, shell: 2 }, lv: [{ dmg: 5, heal: 2 }, { dmg: 7, heal: 2 }] },
+      { id: 'pearlTithe', name: 'Pearl Tithe', req: { pearl: 2 }, lv: [{ cp: 2, draw: 1 }] },
+      { id: 'currentWeave', name: 'Current Weave', straight: 4, lv: [{ dmg: 6, chill: 1, shield: 1 }] },
+      { id: 'riptide', name: 'Riptide', req: { wave: 4 }, lv: [{ dmg: 7, chill: 1 }, { dmg: 8, chill: 1, undef: true }] },
+      { id: 'deepWard', name: 'Deep Ward', req: { shell: 4 }, lv: [{ heal: 4, shield: 4 }] },
+      { id: 'grandTide', name: 'Grand Tide', straight: 5, lv: [{ dmg: 10, chill: 1, heal: 3, undef: true }] },
+      { id: 'drown', name: 'Drown', req: { wave: 5 }, lv: [{ dmg: 12, chill: 1 }] },
+      { id: 'seerGaze', name: "Seer's Gaze", req: { eye: 5 }, ult: true, lv: [{ dmg: 14, chill: 1, heal: 5 }] },
+    ],
+    defense: {
+      id: 'undertow', name: 'Undertow', lv: [{ n: 4 }, { n: 5 }],
+      text: 'Prevent 2 damage for each Shell. With 2 or more Pearl, heal 2.',
+      resolve(sym) { return { prevent: 2 * (sym.shell || 0), heal: (sym.pearl || 0) >= 2 ? 2 : 0 }; },
+    },
+    deck: { secondWind: 1, tidalSurge: 2, loadedDie: 1, jinx: 2, ironResolve: 1, parry: 1, mirrorPool: 1, seaMist: 2, scoutAhead: 1, quickBandage: 1, cheapShot: 1, coldSnap: 1,
+      up_ripple: 1, up_brinePair: 1, up_riptide: 1, up_undertow: 1 },
+  },
+};
+
+/* Card types follow the rulebook: main = your main phases; roll = any roll phase (yours or your opponent's);
+   instant = any time; upgrade = your main phases, stays in play. Only the player the game is waiting on can act. */
+const CARDS = {
+  secondWind: { name: 'Second Wind', type: 'roll', cost: 1, icon: 'dice', target: { who: 'self', kind: 'dice', max: 1 }, text: 'Reroll 1 of your dice.', ai: 6,
+    apply(G, pi, a) { rerollLive(G, a.dice); } },
+  tidalSurge: { name: 'Tidal Surge', type: 'roll', cost: 1, icon: 'dice', target: { who: 'self', kind: 'dice', max: 2 }, text: 'Reroll up to 2 of your dice.', ai: 6,
+    apply(G, pi, a) { rerollLive(G, a.dice); } },
+  loadedDie: { name: 'Loaded Die', type: 'roll', cost: 2, icon: 'dice', target: { who: 'self', kind: 'face' }, text: 'Change 1 of your dice to any face.', ai: 7,
+    apply(G, pi, a) { liveSet(G).dice[a.dice[0]].face = a.face; } },
+  jinx: { name: 'Jinx', type: 'roll', cost: 2, icon: 'eye', target: { who: 'opp', kind: 'dice', max: 1 }, text: 'Reroll 1 of your opponent’s dice while they roll, for attack or defense.', ai: 6,
+    apply(G, pi, a) { rerollLive(G, a.dice); } },
+  whetstone: { name: 'Whetstone', type: 'roll', cost: 1, icon: 'blade', text: 'Boost: your attack this turn deals +2 damage. Play it during your offensive roll.', ai: 4,
+    cond(G, pi) { return G.phase === 'roll' && G.active === pi ? null : 'Play it during your own offensive roll, before you use an ability.'; },
+    apply(G, pi) { G.players[pi].bonusDmg += 2; } },
+  ironResolve: { name: 'Iron Resolve', type: 'instant', cost: 1, icon: 'shield', text: 'Gain 3 Shield.', ai: 5,
+    apply(G, pi) { addShield(G, pi, 3); } },
+  parry: { name: 'Parry', type: 'instant', cost: 1, icon: 'shield', text: 'When you are attacked: prevent 4 damage. Does not work on Ultimates.', ai: 7,
+    cond: attackedCond, apply(G, pi) { G.pending.reduction += 4; G.pending.reducers.push('Parry'); } },
+  mirrorPool: { name: 'Mirror Pool', type: 'instant', cost: 2, icon: 'wave', text: 'When you are attacked: prevent 2 damage and deal 2 back.', ai: 6,
+    cond: attackedCond, apply(G, pi) { G.pending.reduction += 2; G.pending.reflect += 2; G.pending.reducers.push('Mirror Pool'); } },
+  seaMist: { name: 'Sea Mist', type: 'instant', cost: 1, icon: 'wave', text: 'Gain 2 Shield and heal 1.', ai: 5,
+    apply(G, pi) { addShield(G, pi, 2); heal(G, pi, 1); } },
+  quickBandage: { name: 'Quick Bandage', type: 'main', cost: 2, icon: 'plus', text: 'Heal 4.', ai: 5,
+    apply(G, pi) { heal(G, pi, 4); } },
+  scoutAhead: { name: 'Scout Ahead', type: 'main', cost: 1, icon: 'cards', text: 'Draw 2 cards.', ai: 4,
+    apply(G, pi) { draw(G, pi, 2); } },
+  fanFlames: { name: 'Fan the Flames', type: 'main', cost: 1, icon: 'flame', text: 'Give the opponent 1 Burn.', ai: 5,
+    apply(G, pi) { addBurn(G, 1 - pi, 1); } },
+  powderKeg: { name: 'Powder Keg', type: 'main', cost: 3, icon: 'flame', text: 'Deal 4 damage and give 1 Burn.', ai: 6,
+    apply(G, pi) { dealDamage(G, 1 - pi, 4); addBurn(G, 1 - pi, 1); } },
+  cheapShot: { name: 'Cheap Shot', type: 'main', cost: 2, icon: 'blade', text: 'Deal 3 damage.', ai: 5,
+    apply(G, pi) { dealDamage(G, 1 - pi, 3); } },
+  coldSnap: { name: 'Cold Snap', type: 'main', cost: 2, icon: 'snow', text: 'Chill the opponent: 1 fewer roll on their next offensive roll.', ai: 5,
+    apply(G, pi) { G.players[1 - pi].chill = 1; } },
+};
+function attackedCond(G, pi) {
+  if (!(G.phase === 'defense' && G.pending && G.pending.defender === pi)) return 'Play it when you are attacked.';
+  if (G.pending.ult) return 'Ultimates can’t be reduced.';
+  return null;
+}
+/* upgrade cards, generated from hero data */
+Object.keys(HEROES).forEach(hid => {
+  const h = HEROES[hid];
+  Object.keys(h.deck).filter(k => k.indexOf('up_') === 0).forEach(k => {
+    const id = k.slice(3), isDef = h.defense.id === id;
+    const ab = isDef ? h.defense : h.abilities.find(a => a.id === id);
+    CARDS[k] = {
+      name: ab.name + ' II', type: 'upgrade', cost: isDef || (ab.lv[1].dmg || 0) >= 9 ? 3 : 2, icon: 'up', hero: hid, ab: id, level: 2, ai: 9,
+      text: isDef ? 'Upgrade ' + ab.name + ': roll ' + ab.lv[1].n + ' defense dice instead of ' + ab.lv[0].n + '.'
+        : 'Upgrade ' + ab.name + ': ' + effText(ab.lv[1]) + ' (was ' + effText(ab.lv[0]) + ').',
+      apply(G, pi) { G.players[pi].upg[id] = 2; },
+    };
+  });
+});
+
+/* ---------- utilities ---------- */
+function makeRng(box) {
+  return function () {
+    const a = box.s = (box.s + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function shuffle(arr, rng) {
+  for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const t = arr[i]; arr[i] = arr[j]; arr[j] = t; }
+  return arr;
+}
+function d6(G) { return Math.floor(G.rng() * 6); }
+function log(G, text, who) { G.log.push({ t: text, who: who == null ? -1 : who, turn: G.turnNo }); if (G.log.length > 4000) G.log.shift(); return G.log[G.log.length - 1]; }
+function banner(G, text) { G.banner = text; G.bannerSeq++; }
+function fx(G, pi, type, n) { if (n > 0) G.fx.push({ pi, type, n }); }
+function effText(eff, bonus) {
+  const t = []; bonus = bonus || 0;
+  if (eff.dmg) t.push((eff.dmg + bonus) + ' dmg');
+  if (eff.undef) t.push('Undefendable');
+  if (eff.burn) t.push(eff.burn + ' Burn');
+  if (eff.chill) t.push('Chill');
+  if (eff.heal) t.push('Heal ' + eff.heal);
+  if (eff.shield) t.push(eff.shield + ' Shield');
+  if (eff.cp) t.push('+' + eff.cp + ' CP');
+  if (eff.draw) t.push('Draw ' + eff.draw);
+  return t.join(' · ');
+}
+function level(p, id) { return p.upg[id] || 1; }
+function abEff(p, ab) { return ab.lv[Math.min(level(p, ab.id), ab.lv.length) - 1]; }
+function defN(p) { const d = p.hero.defense; return d.lv[Math.min(level(p, d.id), d.lv.length) - 1].n; }
+function symCounts(hero, dice) {
+  const c = {};
+  dice.forEach(d => { const f = d.face != null ? d.face : d; if (f != null && f >= 0) { const s = hero.faces[f]; c[s] = (c[s] || 0) + 1; } });
+  return c;
+}
+const STRAIGHTS = { 4: [[0, 1, 2, 3], [1, 2, 3, 4], [2, 3, 4, 5]], 5: [[0, 1, 2, 3, 4], [1, 2, 3, 4, 5]] };
+function faceMet(hero, ab, faces) {
+  if (ab.straight) { const s = new Set(faces.filter(f => f != null)); return STRAIGHTS[ab.straight].some(w => w.every(v => s.has(v))); }
+  const c = symCounts(hero, faces);
+  return Object.keys(ab.req).every(k => (c[k] || 0) >= ab.req[k]);
+}
+function reqText(ab) {
+  if (ab.straight === 4) return 'a small straight (4 numbers in a row)';
+  if (ab.straight === 5) return 'a large straight (5 numbers in a row)';
+  return Object.keys(ab.req).map(s => ab.req[s] + ' ' + s[0].toUpperCase() + s.slice(1)).join(' + ');
+}
+
+/* ---------- state ---------- */
+function newGame(opts) {
+  const seed = opts.seed != null ? opts.seed : ((Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0);
+  const rngBox = { s: seed | 0 }, rng = makeRng(rngBox);
+  const humans = opts.humans || [true, false];
+  const players = opts.heroes.map((hid, idx) => {
+    const hero = HEROES[hid]; const deck = [];
+    for (const cid of Object.keys(hero.deck)) for (let k = 0; k < hero.deck[cid]; k++) deck.push(cid);
+    shuffle(deck, rng);
+    return { idx, hero, human: !!humans[idx], hp: START_HP, cp: START_CP, hand: [], deck, discard: [], inPlay: [], upg: {}, shield: 0, burn: 0, chill: 0, bonusDmg: 0, deckSize: deck.length };
+  });
+  const G = {
+    rng, rngBox, players, active: 0, start: 0, turnNo: 1, phase: 'main1',
+    dice: Array.from({ length: DICE }, () => ({ face: null, held: false })),
+    rolled: 0, rollsLeft: 0, pending: null, prompt: null, winner: null, log: [], fx: [], banner: null, bannerSeq: 0, rolloff: null,
+  };
+  players.forEach(p => draw(G, p.idx, START_HAND));
+  // roll-off for the start player
+  let a, b;
+  do { a = d6(G) + 1; b = d6(G) + 1; } while (a === b);
+  G.start = opts.start != null ? opts.start : (a > b ? 0 : 1);
+  G.rolloff = [a, b];
+  G.active = G.start;
+  const sp = players[G.start].hero.name;
+  log(G, 'Roll-off: ' + players[0].hero.name + ' ' + a + ', ' + players[1].hero.name + ' ' + b + '. ' + sp + ' goes first.');
+  banner(G, 'Roll-off ' + a + ' vs ' + b + ': ' + (G.start === 0 && humans[0] ? 'you go first' : sp + ' goes first'));
+  startTurn(G);
+  return G;
+}
+
+function draw(G, pi, n) {
+  const p = G.players[pi];
+  for (let k = 0; k < n; k++) {
+    if (!p.deck.length && p.discard.length) { p.deck = shuffle(p.discard, G.rng); p.discard = []; }
+    if (p.deck.length) p.hand.push(p.deck.pop());
+  }
+}
+function heal(G, pi, n) { const p = G.players[pi]; const before = p.hp; p.hp = Math.min(MAX_HP, p.hp + n); fx(G, pi, 'heal', p.hp - before); return p.hp - before; }
+function addShield(G, pi, n) { const p = G.players[pi]; const before = p.shield; p.shield = Math.min(MAX_SHIELD, p.shield + n); fx(G, pi, 'shield', p.shield - before); }
+function addBurn(G, pi, n) { const p = G.players[pi]; p.burn = Math.min(MAX_BURN, p.burn + n); }
+function dealDamage(G, pi, n, opts) {
+  const p = G.players[pi]; let rem = Math.max(0, n), absorbed = 0;
+  if (rem > 0 && !(opts && opts.pierce) && p.shield > 0) { absorbed = Math.min(p.shield, rem); p.shield -= absorbed; rem -= absorbed; }
+  if (rem > 0) { p.hp = Math.max(0, p.hp - rem); fx(G, pi, (opts && opts.burn) ? 'burn' : 'dmg', rem); }
+  return { hp: rem, absorbed };
+}
+function checkWin(G) {
+  const a = G.players[0], b = G.players[1];
+  if (a.hp <= 0 || b.hp <= 0) {
+    G.winner = (a.hp <= 0 && b.hp <= 0) ? -1 : (a.hp <= 0 ? 1 : 0);
+    G.phase = 'over'; G.pending = null; G.prompt = null;
+    log(G, G.winner === -1 ? 'Both heroes fall. A draw.' : G.players[G.winner].hero.name + ' wins the duel.');
+    return true;
+  }
+  return false;
+}
+
+function startTurn(G) {
+  const pi = G.active, p = G.players[pi];
+  p.bonusDmg = 0; G.rolled = 0; G.rollsLeft = 0; G.pending = null; G.prompt = null;
+  G.dice.forEach(d => { d.face = null; d.held = false; });
+  Object.assign(log(G, p.hero.name + ' begins turn ' + Math.ceil(G.turnNo / 2) + '.', pi), { kind: 'turn', hp: G.players.map(x => x.hp) });
+  // Upkeep
+  if (p.burn > 0) {
+    const n = p.burn; p.burn--;
+    dealDamage(G, pi, n, { pierce: true, burn: true });
+    log(G, 'Burn scorches ' + p.hero.name + ' for ' + n + '.', 1 - pi);
+    if (checkWin(G)) return;
+  }
+  if (G.turnNo > 50) {
+    const f = 1 + Math.floor((G.turnNo - 51) / 6);
+    dealDamage(G, pi, f, { pierce: true });
+    log(G, 'Fatigue drains ' + f + ' from ' + p.hero.name + '.');
+    if (checkWin(G)) return;
+  }
+  // Income: the start player skips it on their first turn
+  if (G.turnNo === 1) log(G, p.hero.name + ' goes first and skips income this turn.', pi);
+  else { p.cp = Math.min(MAX_CP, p.cp + 1); draw(G, pi, 1); fx(G, pi, 'cp', 1); }
+  G.phase = 'main1';
+}
+function nextTurn(G) { G.active = 1 - G.active; G.turnNo++; startTurn(G); }
+
+/* who the game is waiting on */
+function actor(G) {
+  if (G.phase === 'over') return -1;
+  if (G.prompt) return G.prompt.pi;
+  if (G.phase === 'defense') return G.pending.defender;
+  return G.active;
+}
+/* the dice currently being rolled, if any */
+function liveSet(G) {
+  if (G.phase === 'roll' && G.rolled > 0) return { owner: G.active, dice: G.dice, def: false };
+  if (G.phase === 'defense' && G.pending && G.pending.def && G.pending.def.rolled) return { owner: G.pending.defender, dice: G.pending.def.dice, def: true };
+  return null;
+}
+function rerollLive(G, idxs) { const ls = liveSet(G); idxs.forEach(i => { ls.dice[i].face = d6(G); }); }
+
+/* ---------- offensive roll ---------- */
+function toRollPhase(G) {
+  if (G.phase !== 'main1' || G.prompt) return false;
+  const p = G.players[G.active];
+  G.rollsLeft = 3 - (p.chill ? 1 : 0);
+  if (p.chill) { p.chill = 0; log(G, p.hero.name + ' is Chilled: only ' + G.rollsLeft + ' rolls this turn.', 1 - G.active); }
+  G.phase = 'roll';
+  return true;
+}
+function rollDice(G) {
+  if (G.phase !== 'roll' || G.rollsLeft <= 0 || G.prompt) return null;
+  const first = G.rolled === 0, rolled = [];
+  G.dice.forEach((d, i) => { if (first || !d.held) { d.face = d6(G); rolled.push(i); } });
+  if (first) G.dice.forEach(d => { d.held = false; });
+  G.rollsLeft--; G.rolled++;
+  return rolled;
+}
+function toggleHold(G, i) {
+  if (G.phase !== 'roll' || G.prompt || G.rolled === 0 || G.rollsLeft <= 0 || G.dice[i].face == null) return false;
+  G.dice[i].held = !G.dice[i].held; return true;
+}
+function availableAbilities(G, pi) {
+  const p = G.players[pi], faces = G.dice.map(d => d.face);
+  return p.hero.abilities.filter(ab => faceMet(p.hero, ab, faces));
+}
+function hasOppDiceCard(G, pi) {
+  const p = G.players[pi];
+  return p.hand.some(id => { const c = CARDS[id]; return c.target && c.target.who === 'opp' && p.cp >= c.cost; });
+}
+/* The attacker asks to use an ability. The opponent may first respond by changing a die. */
+function requestActivate(G, abId) {
+  if (G.phase !== 'roll' || G.prompt) return false;
+  const pi = G.active, p = G.players[pi];
+  if (abId === null) {
+    Object.assign(log(G, p.hero.name + ' has no usable ability.', pi), { dice: G.dice.map(d => d.face), rolls: G.rolled });
+    G.phase = 'main2'; return true;
+  }
+  if (G.rolled === 0) return false;
+  const ab = p.hero.abilities.find(a => a.id === abId);
+  if (!ab || !faceMet(p.hero, ab, G.dice.map(d => d.face))) return false;
+  if (hasOppDiceCard(G, 1 - pi)) { G.prompt = { pi: 1 - pi, kind: 'respond', abId, played: false }; return true; }
+  activate(G, abId);
+  return true;
+}
+function activate(G, abId) {
+  const pi = G.active, p = G.players[pi], ab = p.hero.abilities.find(a => a.id === abId);
+  const eff = Object.assign({}, abEff(p, ab));
+  const bonus = eff.dmg ? p.bonusDmg : 0;
+  if (eff.dmg) p.bonusDmg = 0;
+  const lv = level(p, ab.id);
+  const nm = ab.name + (lv > 1 ? ' II' : '');
+  G.pending = { attacker: pi, defender: 1 - pi, abId, name: nm, ult: !!ab.ult, undef: !!eff.undef || !!ab.ult, eff, bonus, reduction: 0, reducers: [], reflect: 0, def: null };
+  Object.assign(log(G, p.hero.name + ' uses ' + nm + (ab.ult ? ' (ULTIMATE)' : '') + ': ' + effText(eff, bonus) + '.', pi), { dice: G.dice.map(d => d.face), rolls: G.rolled });
+  banner(G, (p.human ? 'You use ' : p.hero.name + ' uses ') + nm + (ab.ult ? ' — ULTIMATE' : '') + ' · ' + effText(eff, bonus));
+  if (!eff.dmg || ab.ult) { resolveAttack(G); return; }
+  G.phase = 'defense';
+  const d = G.players[1 - pi];
+  G.pending.def = { n: defN(d), dice: [], rolled: false, skip: !!eff.undef };
+}
+
+/* ---------- defensive roll ---------- */
+function rollDefense(G) {
+  const pend = G.pending;
+  if (G.phase !== 'defense' || G.prompt || !pend.def || pend.def.rolled || pend.def.skip) return null;
+  pend.def.dice = Array.from({ length: pend.def.n }, () => ({ face: d6(G), held: false }));
+  pend.def.rolled = true;
+  return pend.def.dice.map((d, i) => i);
+}
+function defenseOutcome(G) {
+  const pend = G.pending;
+  if (!pend || !pend.def || !pend.def.rolled) return {};
+  const h = G.players[pend.defender].hero;
+  return h.defense.resolve(symCounts(h, pend.def.dice));
+}
+function hitMath(G) {
+  const pend = G.pending, op = G.players[pend.defender];
+  const out = { base: pend.eff.dmg || 0, bonus: pend.bonus || 0, cards: 0, defense: 0, shield: 0, hp: 0, counter: 0, defHeal: 0, burnBack: 0 };
+  let rem = out.base + out.bonus;
+  if (!out.base) return out;
+  if (pend.ult) { out.hp = rem; return out; }
+  const d = defenseOutcome(G);
+  out.cards = Math.min(pend.reduction, rem); rem -= out.cards;
+  out.defense = Math.min(d.prevent || 0, rem); rem -= out.defense;
+  out.shield = Math.min(op.shield, rem); rem -= out.shield;
+  out.hp = rem; out.counter = d.counter || 0; out.defHeal = d.heal || 0; out.burnBack = d.burn || 0;
+  return out;
+}
+/* The defender is done. The attacker may still respond by changing a defense die. */
+function confirmDefense(G) {
+  const pend = G.pending;
+  if (G.phase !== 'defense' || G.prompt || !pend.def || !(pend.def.rolled || pend.def.skip)) return false;
+  if (pend.def.rolled && !pend.def.logged) {
+    pend.def.logged = true;
+    const dh = G.players[pend.defender].hero;
+    Object.assign(log(G, G.players[pend.defender].hero.name + ' defends with ' + dh.defense.name + '.', pend.defender), { dice: pend.def.dice.map(d => d.face), rolls: 1, def: true });
+  }
+  if (pend.def.rolled && hasOppDiceCard(G, pend.attacker)) { G.prompt = { pi: pend.attacker, kind: 'respondDef', played: false }; return true; }
+  resolveAttack(G);
+  return true;
+}
+function passPrompt(G) {
+  const pr = G.prompt;
+  if (!pr) return false;
+  G.prompt = null;
+  if (pr.kind === 'respond' && !pr.played) activate(G, pr.abId);
+  else if (pr.kind === 'respondDef' && !pr.played) resolveAttack(G);
+  /* if a card was played, control returns to the attacker (roll) or the defender (defense) */
+  if (pr.kind === 'respondDef' && pr.played && G.pending && G.pending.def) G.pending.def.logged = false;
+  return true;
+}
+function resolveAttack(G) {
+  const pend = G.pending;
+  if (!pend) return false;
+  const a = pend.attacker, d = pend.defender, me = G.players[a], op = G.players[d], eff = pend.eff;
+  if (eff.dmg) {
+    const m = hitMath(G);
+    op.shield -= m.shield;
+    op.hp = Math.max(0, op.hp - m.hp); fx(G, d, 'dmg', m.hp);
+    const parts = [String(m.base)];
+    if (m.bonus) parts.push('+' + m.bonus + ' Boost');
+    if (m.cards) parts.push('−' + m.cards + ' ' + pend.reducers.join(' & '));
+    if (m.defense) parts.push('−' + m.defense + ' ' + op.hero.defense.name);
+    if (m.shield) parts.push('−' + m.shield + ' Shield');
+    const why = parts.length > 1 ? ' (' + parts.join(' ') + ')' : '';
+    log(G, pend.name + ' hits ' + op.hero.name + ' for ' + m.hp + why + '.', a);
+    banner(G, pend.name + ' hits for ' + m.hp + why);
+    if (pend.reflect) { const r = dealDamage(G, a, pend.reflect); log(G, 'Mirror Pool reflects ' + r.hp + ' at ' + me.hero.name + '.', d); }
+    if (m.counter) { const r = dealDamage(G, a, m.counter); log(G, op.hero.defense.name + ' strikes back at ' + me.hero.name + ' for ' + r.hp + (r.absorbed ? ' (' + r.absorbed + ' blocked by Shield)' : '') + '.', d); }
+    if (m.defHeal) { const h = heal(G, d, m.defHeal); if (h) log(G, op.hero.name + ' heals ' + h + ' from ' + op.hero.defense.name + '.', d); }
+    if (m.burnBack) { addBurn(G, a, 1); log(G, me.hero.name + ' catches 1 Burn from ' + op.hero.defense.name + '.', d); }
+  }
+  if (eff.burn) { const b = op.burn; addBurn(G, d, eff.burn); if (op.burn > b) log(G, op.hero.name + ' is burning (' + op.burn + ').', a); }
+  if (eff.chill && !op.chill) { op.chill = 1; log(G, op.hero.name + ' is Chilled.', a); }
+  if (eff.heal) { const h = heal(G, a, eff.heal); if (h) log(G, me.hero.name + ' heals ' + h + '.', a); }
+  if (eff.shield) addShield(G, a, eff.shield);
+  if (eff.cp) { me.cp = Math.min(MAX_CP, me.cp + eff.cp); fx(G, a, 'cp', eff.cp); }
+  if (eff.draw) draw(G, a, eff.draw);
+  G.pending = null; G.prompt = null;
+  if (!checkWin(G)) G.phase = 'main2';
+  return true;
+}
+
+/* ---------- cards ---------- */
+const TYPE_WHEN = {
+  main: 'Main cards are played in your own main phases.',
+  upgrade: 'Upgrades are played in your own main phases.',
+};
+function canPlay(G, pi, idx) {
+  const p = G.players[pi], id = p.hand[idx];
+  if (!id) return { ok: false, why: 'No such card.' };
+  const c = CARDS[id];
+  if (G.phase === 'over') return { ok: false, why: 'The duel is over.' };
+  if (actor(G) !== pi) return { ok: false, why: 'Wait until the game is waiting on you.' };
+  if (c.type === 'main' || c.type === 'upgrade') {
+    if (!(G.active === pi && (G.phase === 'main1' || G.phase === 'main2') && !G.prompt)) return { ok: false, why: TYPE_WHEN[c.type] };
+    if (c.type === 'upgrade' && level(p, c.ab) >= c.level) return { ok: false, why: 'Already upgraded.' };
+  } else if (c.type === 'roll') {
+    const ls = liveSet(G);
+    if (c.target) {
+      if (!ls) return { ok: false, why: c.target.who === 'self' ? 'Play it after you roll, while your dice are on the table.' : 'Play it while your opponent is rolling.' };
+      if (c.target.who === 'self' && ls.owner !== pi) return { ok: false, why: 'It changes your own dice. Play it when you roll.' };
+      if (c.target.who === 'opp' && ls.owner === pi) return { ok: false, why: 'It changes your opponent’s dice. Play it while they roll.' };
+    }
+  }
+  if (c.cond) { const w = c.cond(G, pi); if (w) return { ok: false, why: w }; }
+  if (p.cp < c.cost) return { ok: false, why: 'Needs ' + c.cost + ' CP. You can sell cards for 1 CP each in your main phases.' };
+  return { ok: true };
+}
+function playCard(G, pi, idx, arg) {
+  const chk = canPlay(G, pi, idx);
+  if (!chk.ok) return chk;
+  const p = G.players[pi], id = p.hand[idx], c = CARDS[id];
+  arg = arg || {};
+  if (c.target) {
+    const ls = liveSet(G), ds = arg.dice;
+    if (!Array.isArray(ds) || !ds.length || new Set(ds).size !== ds.length) return { ok: false, why: 'Pick a die.' };
+    if (ds.some(i => !(i >= 0 && i < ls.dice.length))) return { ok: false, why: 'Pick a die on the table.' };
+    if (c.target.kind === 'dice' && ds.length > c.target.max) return { ok: false, why: 'Too many dice.' };
+    if (c.target.kind === 'face' && !(arg.face >= 0 && arg.face < 6)) return { ok: false, why: 'Pick a face.' };
+  }
+  p.hand.splice(idx, 1); p.cp -= c.cost;
+  if (c.type === 'upgrade') p.inPlay.push(id); else p.discard.push(id);
+  if (G.prompt && G.prompt.pi === pi) G.prompt.played = true;
+  c.apply(G, pi, arg);
+  log(G, p.hero.name + ' plays ' + c.name + '.', pi);
+  if (!p.human) banner(G, p.hero.name + ' plays ' + c.name);
+  checkWin(G);
+  return { ok: true };
+}
+function canSell(G, pi) {
+  if (actor(G) !== pi || G.active !== pi || G.prompt) return { ok: false, why: 'You can sell cards in your own main phases.' };
+  if (!(G.phase === 'main1' || G.phase === 'main2' || G.phase === 'discard')) return { ok: false, why: 'You can sell cards in your own main phases.' };
+  return { ok: true };
+}
+function sellCard(G, pi, idx) {
+  const chk = canSell(G, pi);
+  if (!chk.ok) return chk;
+  const p = G.players[pi], id = p.hand[idx];
+  if (!id) return { ok: false, why: 'No such card.' };
+  p.hand.splice(idx, 1); p.discard.push(id);
+  const before = p.cp; p.cp = Math.min(MAX_CP, p.cp + 1); fx(G, pi, 'cp', p.cp - before);
+  log(G, p.hero.name + ' sells ' + CARDS[id].name + ' for 1 CP.', pi);
+  if (G.phase === 'discard' && p.hand.length <= HAND_LIMIT) nextTurn(G);
+  return { ok: true };
+}
+function endTurn(G) {
+  if (G.phase !== 'main2' || G.prompt) return false;
+  if (G.players[G.active].hand.length > HAND_LIMIT) { G.phase = 'discard'; return true; }
+  nextTurn(G); return true;
+}
+
+/* ---------- save / restore ---------- */
+function serializeGame(G) {
+  return JSON.stringify(G, function (k, v) {
+    if (k === 'rng' || k === 'fx') return undefined;
+    if (k === 'hero' && v && v.id) return v.id;
+    return v;
+  });
+}
+function restoreGame(str) {
+  const G = JSON.parse(str);
+  if (!G || !Array.isArray(G.players) || G.players.length !== 2 || !G.rngBox) throw new Error('bad save');
+  G.players.forEach(p => { p.hero = HEROES[p.hero]; if (!p.hero || !p.upg) throw new Error('unknown hero'); });
+  G.rng = makeRng(G.rngBox);
+  G.fx = [];
+  return G;
+}
+
+/* ---------- AI ---------- */
+function scoreEff(G, pi, eff, bonus, ult) {
+  const me = G.players[pi], op = G.players[1 - pi];
+  const dmg = eff.dmg ? eff.dmg + (bonus || 0) : 0;
+  let s = dmg * (ult || eff.undef ? 1.15 : 1);
+  if (dmg > 0 && dmg >= op.hp + (ult ? 0 : op.shield)) s += 100;
+  s += (eff.burn || 0) * (op.burn < MAX_BURN ? 2.2 : 0.4);
+  s += Math.min(eff.heal || 0, START_HP - me.hp) * 0.9;
+  s += Math.min(eff.shield || 0, MAX_SHIELD - me.shield) * 0.6;
+  s += eff.chill ? (op.chill ? 0 : 3) : 0;
+  s += (eff.cp || 0) * 1.1 + (eff.draw || 0) * 1.2;
+  return s;
+}
+function abScore(G, pi, ab) { const p = G.players[pi]; return scoreEff(G, pi, abEff(p, ab), p.bonusDmg, ab.ult); }
+function holdMask(hero, ab, faces) {
+  const keep = faces.map(() => false);
+  if (ab.straight) {
+    let best = null;
+    STRAIGHTS[ab.straight].forEach(w => { const n = w.filter(v => faces.indexOf(v) >= 0).length; if (!best || n > best.n) best = { w, n }; });
+    best.w.forEach(v => { const i = faces.findIndex((f, k) => f === v && !keep[k]); if (i >= 0) keep[i] = true; });
+    return keep;
+  }
+  Object.keys(ab.req).forEach(s => {
+    let k = ab.req[s];
+    faces.forEach((f, i) => { if (k > 0 && !keep[i] && f != null && hero.faces[f] === s) { keep[i] = true; k--; } });
+  });
+  return keep;
+}
+function reachProb(G, hero, ab, faces, R) {
+  if (faceMet(hero, ab, faces)) return 1;
+  if (R <= 0) return 0;
+  let h = 2166136261;
+  faces.forEach(f => { h = Math.imul(h ^ (f + 7), 16777619); });
+  h = Math.imul(h ^ (G.turnNo * 31 + R), 16777619);
+  for (let i = 0; i < ab.id.length; i++) h = Math.imul(h ^ ab.id.charCodeAt(i), 16777619);
+  const rng = makeRng({ s: h | 0 }), N = 48;
+  let hit = 0;
+  for (let s = 0; s < N; s++) {
+    const f = faces.slice();
+    for (let r = 0; r < R; r++) {
+      const keep = holdMask(hero, ab, f);
+      for (let i = 0; i < f.length; i++) if (!keep[i]) f[i] = Math.floor(rng() * 6);
+      if (faceMet(hero, ab, f)) { hit++; break; }
+    }
+  }
+  return hit / N;
+}
+function bestMet(G, pi, faces) {
+  const p = G.players[pi]; let b = null;
+  p.hero.abilities.forEach(ab => { if (faceMet(p.hero, ab, faces)) { const sc = abScore(G, pi, ab); if (!b || sc > b.sc) b = { ab, sc }; } });
+  return b;
+}
+
+function aiAct(G) {
+  const pi = actor(G);
+  if (pi < 0 || G.players[pi].human) return null;
+  if (G.prompt) return aiPrompt(G, pi);
+  switch (G.phase) {
+    case 'main1': if (aiMain(G, pi)) return { kind: 'card' }; toRollPhase(G); return { kind: 'phase' };
+    case 'roll': return aiRoll(G, pi);
+    case 'defense': return aiDefense(G, pi);
+    case 'main2': if (aiMain(G, pi)) return { kind: 'card' }; endTurn(G); return { kind: 'phase' };
+    case 'discard': aiSellWorst(G, pi); return { kind: 'sell' };
+  }
+  return null;
+}
+function aiRoll(G, pi) {
+  const p = G.players[pi], h = p.hero;
+  if (G.rolled === 0) return { kind: 'roll', rolled: rollDice(G) };
+  const faces = G.dice.map(d => d.face), R = G.rollsLeft;
+  if (R > 0) {
+    let best = null;
+    h.abilities.forEach(ab => {
+      const met = faceMet(h, ab, faces);
+      const ev = abScore(G, pi, ab) * (met ? 1 : reachProb(G, h, ab, faces, R));
+      if (!best || ev > best.ev + 1e-9 || (Math.abs(ev - best.ev) < 1e-9 && met && !best.met)) best = { ab, ev, met };
+    });
+    if (best && best.met) return aiFinish(G, pi);
+    const keep = best && best.ev > 0 ? holdMask(h, best.ab, faces) : faces.map(() => false);
+    G.dice.forEach((d, i) => { d.held = keep[i]; });
+    return { kind: 'roll', rolled: rollDice(G) };
+  }
+  if (aiTryRollCard(G, pi)) return { kind: 'card' };
+  return aiFinish(G, pi);
+}
+function aiFinish(G, pi) {
+  const p = G.players[pi], best = bestMet(G, pi, G.dice.map(d => d.face));
+  if (!best) { requestActivate(G, null); return { kind: 'skip' }; }
+  if (abEff(p, best.ab).dmg > 0) {
+    const wi = p.hand.indexOf('whetstone');
+    if (wi >= 0 && p.cp >= 2 && canPlay(G, pi, wi).ok) { playCard(G, pi, wi, {}); return { kind: 'card' }; }
+  }
+  requestActivate(G, best.ab.id);
+  return { kind: 'ability', ab: best.ab };
+}
+function aiTryRollCard(G, pi) {
+  const p = G.players[pi], faces = G.dice.map(d => d.face);
+  const sc = f => { const b = bestMet(G, pi, f); return b ? b.sc : 0; };
+  const base = sc(faces), thresh = { secondWind: 2.5, tidalSurge: 3, loadedDie: 4 };
+  let bp = null;
+  const consider = (idx, arg, gain, id) => { if (gain >= thresh[id] && (!bp || gain > bp.gain)) bp = { idx, arg, gain }; };
+  const withF = ch => { const f = faces.slice(); ch.forEach(x => { f[x[0]] = x[1]; }); return f; };
+  p.hand.forEach((id, idx) => {
+    if (!thresh[id] || !canPlay(G, pi, idx).ok) return;
+    if (id === 'loadedDie') {
+      for (let i = 0; i < DICE; i++) for (let f = 0; f < 6; f++) consider(idx, { dice: [i], face: f }, sc(withF([[i, f]])) - base, id);
+    } else if (id === 'secondWind') {
+      for (let i = 0; i < DICE; i++) { let s = 0; for (let f = 0; f < 6; f++) s += sc(withF([[i, f]])); consider(idx, { dice: [i] }, s / 6 - base, id); }
+    } else {
+      for (let i = 0; i < DICE; i++) for (let j = i + 1; j < DICE; j++) {
+        let s = 0; for (let f = 0; f < 6; f++) for (let g = 0; g < 6; g++) s += sc(withF([[i, f], [j, g]]));
+        consider(idx, { dice: [i, j] }, s / 36 - base, id);
+      }
+    }
+  });
+  return bp ? playCard(G, pi, bp.idx, bp.arg).ok : false;
+}
+function aiMain(G, pi) {
+  const p = G.players[pi], op = G.players[1 - pi], oppHp = op.hp + op.shield;
+  const reserve = G.phase === 'main1' ? 2 : 1;
+  for (let idx = 0; idx < p.hand.length; idx++) {
+    const id = p.hand[idx], c = CARDS[id];
+    if (!canPlay(G, pi, idx).ok) continue;
+    const spare = p.cp - c.cost; let ok = false;
+    switch (id) {
+      case 'quickBandage': ok = spare >= reserve && START_HP - p.hp >= 5; break;
+      case 'scoutAhead': ok = spare >= reserve && p.hand.length <= 5; break;
+      case 'fanFlames': ok = spare >= reserve && op.burn <= 1; break;
+      case 'powderKeg': ok = spare >= reserve || 4 >= oppHp; break;
+      case 'cheapShot': ok = spare >= reserve || 3 >= oppHp; break;
+      case 'coldSnap': ok = spare >= reserve && !op.chill; break;
+      case 'seaMist': ok = spare >= reserve + 1 && START_HP - p.hp >= 4 && p.shield <= 2; break;
+      case 'ironResolve': ok = G.phase === 'main2' && spare >= reserve + 1 && p.shield === 0 && p.hp <= 35; break;
+      default: ok = c.type === 'upgrade' && spare >= 0;
+    }
+    if (ok && playCard(G, pi, idx, {}).ok) return true;
+  }
+  // sell surplus cards for CP: in main 2 keep at most 5; sell to afford an upgrade in main 1
+  if (G.phase === 'main2' && p.hand.length > 5 && p.cp < MAX_CP) { aiSellWorst(G, pi); return true; }
+  if (G.phase === 'main1') {
+    const up = p.hand.find(id => CARDS[id].type === 'upgrade' && level(p, CARDS[id].ab) < 2);
+    if (up && CARDS[up].cost - p.cp === 1 && p.hand.length >= 3 && aiSellWorst(G, pi, true)) return true;
+  }
+  return false;
+}
+function aiSellWorst(G, pi, keepUpgrades) {
+  const p = G.players[pi]; let bi = -1, bv = 1e9;
+  p.hand.forEach((id, i) => {
+    const c = CARDS[id];
+    if (keepUpgrades && c.type === 'upgrade') return;
+    let v = c.ai + G.rng() * 0.5;
+    if (c.type === 'upgrade' && level(p, c.ab) >= c.level) v = 0;
+    if (v < bv) { bv = v; bi = i; }
+  });
+  if (bi < 0) { if (keepUpgrades) return false; bi = 0; }
+  return sellCard(G, pi, bi).ok;
+}
+function aiDefense(G, pi) {
+  const p = G.players[pi], pend = G.pending, def = pend.def;
+  if (!def.rolled && !def.skip) return { kind: 'defroll', rolled: rollDefense(G) };
+  const m = hitMath(G);
+  if (m.hp > 0 && !pend.ult) {
+    const lethal = m.hp >= p.hp;
+    const order = [['parry', 3], ['mirrorPool', 4], ['ironResolve', 5], ['seaMist', 5]];
+    for (const [id, min] of order) {
+      const idx = p.hand.indexOf(id);
+      if (idx < 0 || !(lethal || m.hp >= min) || !canPlay(G, pi, idx).ok) continue;
+      if (p.cp - CARDS[id].cost < 0) continue;
+      playCard(G, pi, idx, {});
+      return { kind: 'card' };
+    }
+  }
+  confirmDefense(G);
+  return { kind: 'defconfirm' };
+}
+/* responses: change one die of the opponent's roll */
+function aiPrompt(G, pi) {
+  const pr = G.prompt, p = G.players[pi], opp = G.players[1 - pi];
+  if (pr.played) { passPrompt(G); return { kind: 'pass' }; }
+  const ji = p.hand.findIndex(id => CARDS[id].target && CARDS[id].target.who === 'opp' && p.cp >= CARDS[id].cost);
+  if (ji < 0) { passPrompt(G); return { kind: 'pass' }; }
+  const ls = liveSet(G);
+  if (pr.kind === 'respond') {
+    const ab = opp.hero.abilities.find(a => a.id === pr.abId), eff = abEff(opp, ab);
+    const worth = ab.ult || (eff.dmg || 0) + opp.bonusDmg >= 8;
+    if (worth) {
+      const faces = ls.dice.map(d => d.face), mask = holdMask(opp.hero, ab, faces);
+      const target = mask.findIndex(k => k);
+      if (target >= 0) { playCard(G, pi, ji, { dice: [target] }); return { kind: 'card' }; }
+    }
+  } else if (pr.kind === 'respondDef') {
+    const d = defenseOutcome(G), val = (d.prevent || 0) + (d.counter || 0);
+    if (val >= 4) {
+      const good = opp.hero.id === 'brine' ? 'shell' : 'blade';
+      const target = ls.dice.findIndex(x => opp.hero.faces[x.face] === good);
+      if (target >= 0) { playCard(G, pi, ji, { dice: [target] }); return { kind: 'card' }; }
+    }
+  }
+  passPrompt(G);
+  return { kind: 'pass' };
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { HEROES, CARDS, START_HP, MAX_HP, MAX_CP, HAND_LIMIT, SAVE_VERSION, newGame, toRollPhase, rollDice, toggleHold, requestActivate, passPrompt,
+    rollDefense, confirmDefense, hitMath, defenseOutcome, playCard, canPlay, sellCard, canSell, endTurn, availableAbilities, aiAct, actor, liveSet,
+    effText, scoreEff, abEff, level, serializeGame, restoreGame, faceMet, reqText };
+}
+
+/* ===== UI ===== */
+const $app = document.getElementById('app');
+const $toast = document.getElementById('toast');
+
+const ICONS = {
+  blade: '<path d="M19 5 9.5 14.5" stroke-width="3.2"/><path d="m6.5 12.5 5 5"/><path d="M8.5 15.5 5 19"/>',
+  flame: '<path fill="currentColor" stroke="none" d="M12 2.5c.6 3.6 5.5 5.6 5.5 11a5.5 5.5 0 0 1-11 0c0-2.2 1.1-3.7 2.3-5 .3 1.6 1.2 2.4 2.2 2.4C10.2 8.3 10.8 5.4 12 2.5z"/>',
+  cinder: '<path fill="currentColor" stroke="none" d="m12 2 2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3z"/>',
+  crest: '<path fill="currentColor" stroke="none" d="M3 18.5v-11l5 4 4-6.5 4 6.5 5-4v11z"/>',
+  wave: '<path d="M3 9c2.2-3 4.3-3 6.5 0s4.3 3 6.5 0 3-2 5-1"/><path d="M3 16c2.2-3 4.3-3 6.5 0s4.3 3 6.5 0 3-2 5-1"/>',
+  shell: '<path fill="currentColor" stroke="none" d="M12 21 3.5 11a9 9 0 0 1 17 0z"/><path stroke="rgba(0,0,0,.35)" stroke-width="1.5" d="M12 21V6M12 21 7.5 8M12 21l4.5-13"/>',
+  pearl: '<circle cx="12" cy="12" r="7.5" fill="currentColor" stroke="none"/><circle cx="9.5" cy="9.5" r="2" fill="rgba(255,255,255,.55)" stroke="none"/>',
+  eye: '<path d="M2 12C5.5 6 18.5 6 22 12 18.5 18 5.5 18 2 12z"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>',
+  shield: '<path d="M12 3 4.5 6v5.5c0 4.5 3.2 8 7.5 9.5 4.3-1.5 7.5-5 7.5-9.5V6z"/>',
+  snow: '<path d="M12 3v18M4.5 7.5l15 9M4.5 16.5l15-9"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  up: '<path d="M12 20V5M6 11l6-6 6 6"/><path d="M5 20h14"/>',
+  cards: '<rect x="6" y="3.5" width="12" height="17" rx="2.5"/><path d="M9.5 8h5"/>',
+  dice: '<rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="9" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="15" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="15" r="1.3" fill="currentColor" stroke="none"/>',
+};
+const SYMNAME = { blade: 'Blade', flame: 'Flame', cinder: 'Cinder', crest: 'Crest', wave: 'Wave', shell: 'Shell', pearl: 'Pearl', eye: 'Eye' };
+const TYPE_LABEL = { main: 'Main', roll: 'Roll', instant: 'Instant', upgrade: 'Upgrade' };
+const TYPE_INFO = {
+  main: 'Main card: play it in your own main phases.',
+  roll: 'Roll card: play it during a roll, yours or your opponent’s (attack or defense).',
+  instant: 'Instant card: play it whenever the game is waiting on you, even on your opponent’s turn.',
+  upgrade: 'Upgrade: play it in your main phase. It stays in play for the rest of the game.',
+};
+
+const GLOSS = {
+  CP: 'Combat points, the energy you spend on cards. You start with 2, gain 1 at the start of each turn (the first player skips this on turn 1) and can hold up to 15. Sell a card for 1 CP in your main phases.',
+  Sell: 'In your main phases, discard any card from your hand to gain 1 CP. At the end of your turn you must sell down to 6 cards.',
+  Burn: 'Damage at the start of a burning hero’s turn equal to their Burn amount, ignoring Shield. Then Burn drops by 1. Maximum 3.',
+  Chill: 'The chilled hero gets 1 fewer roll on their next offensive roll (2 instead of 3).',
+  Shield: 'Soaks damage before health is touched. Stays until used up. Maximum 10. Ultimates ignore it.',
+  Boost: 'Extra damage added to your attack this turn. Several Boosts stack. Defense, Shield and Parry can still reduce the hit.',
+  Defense: 'When attacked, the defender rolls their hero’s defense dice once. The result can prevent damage or hit back.',
+  Undefendable: 'This attack skips the defense roll. Shield and Instant cards like Parry still help.',
+  Ultimate: 'Needs five of a hero’s rarest symbol. It cannot be defended, reduced or blocked by Shield, and no cards can answer it. Only changing a die before it is used can stop it.',
+  Straight: 'Dice numbers in a row. A small straight is 4 in a row, like 2-3-4-5. A large straight is all 5 in a row: 1-2-3-4-5 or 2-3-4-5-6.',
+  Upgrade: 'An Upgrade card permanently improves one ability. It stays in play for the rest of the game.',
+};
+const GLOSS_WORDS = { cp: 'CP', sell: 'Sell', burn: 'Burn', chill: 'Chill', chilled: 'Chill', shield: 'Shield', boost: 'Boost', defense: 'Defense', undefendable: 'Undefendable', ultimate: 'Ultimate', ultimates: 'Ultimate', straight: 'Straight', upgrade: 'Upgrade' };
+function glossFor(text) {
+  const seen = [];
+  (text.match(/\b(CP|sell|burn|chill(?:ed)?|shield|boost|defense|undefendable|ultimates?|straight|upgrade)\b/gi) || []).forEach(w => {
+    const k = GLOSS_WORDS[w.toLowerCase()]; if (k && seen.indexOf(k) < 0) seen.push(k);
+  });
+  return seen;
+}
+function glossHTML(keys) {
+  return keys.length ? '<div class="gloss">' + keys.map(k => '<p><b>' + k + '</b> ' + GLOSS[k] + '</p>').join('') + '</div>' : '';
+}
+
+function ic(name, size, cls) {
+  return '<svg class="ic' + (cls ? ' ' + cls : '') + '" width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[name] + '</svg>';
+}
+function sigil(id, size) {
+  const h = HEROES[id], g = id === 'ember' ? 'flame' : 'wave';
+  return '<svg class="sigil" width="' + size + '" height="' + size + '" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 2.5 43 13.5v21L24 45.5 5 34.5v-21z" fill="' + h.color + '" fill-opacity=".16" stroke="' + h.color + '" stroke-width="2"/>' +
+    '<svg x="10" y="10" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="' + h.color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:' + h.color + '">' + ICONS[g] + '</svg></svg>';
+}
+
+/* ---------- storage ---------- */
+function loadRec() {
+  try { const r = JSON.parse(localStorage.getItem('ashes-tides-rec') || 'null'); if (r && typeof r.w === 'number') return r; } catch (e) { /* storage unavailable */ }
+  return { w: 0, l: 0, d: 0 };
+}
+function saveRec() { try { localStorage.setItem('ashes-tides-rec', JSON.stringify(ui.rec)); } catch (e) { /* storage unavailable */ } }
+const SAVE_KEY = 'ashes-tides-save';
+function readSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s || s.v !== SAVE_VERSION || !s.g) return null;
+    const G = restoreGame(s.g);
+    if (G.phase === 'over') return null;
+    return { G, hero: s.hero, at: s.at };
+  } catch (e) { return null; }
+}
+function writeSave() {
+  const G = ui.G;
+  try {
+    if (!G || ui.screen !== 'game' || G.phase === 'over') { localStorage.removeItem(SAVE_KEY); return; }
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ v: SAVE_VERSION, hero: ui.hero, at: Date.now(), g: serializeGame(G) }));
+  } catch (e) { /* storage unavailable: play continues without saving */ }
+}
+function savedAgo(t) {
+  const m = Math.round((Date.now() - t) / 60000);
+  if (!t || m < 1) return 'just now';
+  if (m < 60) return m + ' min ago';
+  const h = Math.round(m / 60);
+  if (h < 24) return h + (h === 1 ? ' hour ago' : ' hours ago');
+  const d = Math.round(h / 24);
+  return d + (d === 1 ? ' day ago' : ' days ago');
+}
+
+const ui = { saved: null, screen: 'start', G: null, sel: null, selCard: null, target: null, rolling: new Set(), sheet: null, prevHp: [100, 100], fxSeen: 0, bannerSeen: 0, driving: false, recorded: false, rec: loadRec() };
+
+/* ---------- small view helpers ---------- */
+function reqHTML(ab, hero, faces) {
+  if (ab.straight) {
+    const set = new Set((faces || []).filter(f => f != null));
+    const wins = ab.straight === 4 ? [[0, 1, 2, 3], [1, 2, 3, 4], [2, 3, 4, 5]] : [[0, 1, 2, 3, 4], [1, 2, 3, 4, 5]];
+    const best = wins.reduce((b, w) => { const n = w.filter(v => set.has(v)).length; return n > b.n ? { w, n } : b; }, { w: wins[0], n: -1 });
+    return '<span class="st">' + best.w.map(v => '<b class="' + (faces && set.has(v) ? 'have' : '') + '">' + (v + 1) + '</b>').join('') + '</span>';
+  }
+  const counts = faces ? symCounts(hero, faces.map(f => ({ face: f }))) : null;
+  let out = '';
+  Object.keys(ab.req).forEach(s => {
+    const need = ab.req[s], have = counts ? (counts[s] || 0) : 0;
+    for (let k = 0; k < need; k++) out += ic(s, 15, k < have ? 'have' : '');
+  });
+  return out;
+}
+function chip(cls, icon, label, key) { return '<button class="chip ' + cls + '" data-act="gloss" data-k="' + key + '" aria-label="' + key + ': what is this?">' + ic(icon, 13) + label + '</button>'; }
+function abName(p, ab) { return ab.name + (level(p, ab.id) > 1 ? ' II' : ''); }
+function abilityRows(p) {
+  const hero = p.hero;
+  return '<div class="abl" style="--hc:' + hero.color + '">' + hero.abilities.map(ab =>
+    '<div class="abrow"><span class="nm">' + abName(p, ab) + (ab.ult ? ' <small class="ult">ULT</small>' : '') + '</span><span class="rq">' + reqHTML(ab, hero, null) + '</span><span class="ef">' + effText(abEff(p, ab)) + '</span></div>').join('') +
+    '<div class="abrow"><span class="nm">' + hero.defense.name + (level(p, hero.defense.id) > 1 ? ' II' : '') + ' <small class="ult">DEFENSE</small></span><span class="rq">' + ic('dice', 15) + ' &times;' + defN(p) + '</span><span class="ef">' + hero.defense.text + '</span></div></div>';
+}
+function facesRow(hero) {
+  return '<div class="facesrow" style="--ink:' + hero.ink + '">' + hero.faces.map((f, i) => '<span class="mf">' + ic(f, 22) + '<small>' + (i + 1) + '</small></span>').join('') + '</div>';
+}
+function defSummary(d) {
+  const t = [];
+  if (d.prevent) t.push('prevents ' + d.prevent);
+  if (d.counter) t.push('strikes back for ' + d.counter);
+  if (d.heal) t.push('heals ' + d.heal);
+  if (d.burn) t.push('gives 1 Burn');
+  return t.length ? t.join(', ') : 'no effect';
+}
+function showToast(text) {
+  if (!text) return;
+  $toast.textContent = text; $toast.classList.add('show');
+  clearTimeout(showToast.t);
+  showToast.t = setTimeout(() => $toast.classList.remove('show'), 2400);
+}
+const sleep = ms => new Promise(r => setTimeout(r, window.__fast ? 0 : ms));
+
+/* ---------- start screen ---------- */
+function continueView() {
+  const s = ui.saved;
+  if (!s) return '';
+  const G = s.G, me = G.players[0], op = G.players[1];
+  const whose = G.phase === 'defense' ? (G.pending.defender === 0 ? 'you are defending' : 'rival is defending') : G.active === 0 ? 'your turn' : 'rival&rsquo;s turn';
+  return '<button class="resume" data-act="resume" style="--hc:' + me.hero.color + '">' +
+    '<span class="rk">Duel in progress &middot; saved ' + savedAgo(s.at) + '</span>' +
+    '<span class="rt">' + me.hero.name + ' <i>vs</i> ' + op.hero.name + '</span>' +
+    '<span class="rs">Round ' + Math.ceil(G.turnNo / 2) + ' &middot; ' + whose + '</span>' +
+    '<span class="rh"><b style="color:' + me.hero.color + '">You ' + me.hp + '</b><b style="color:' + op.hero.color + '">Rival ' + op.hp + '</b> HP</span>' +
+    '<span class="go">Continue duel &rarr;</span></button>';
+}
+function startView() {
+  const r = ui.rec;
+  const card = id => {
+    const h = HEROES[id], foe = HEROES[id === 'ember' ? 'brine' : 'ember'];
+    return '<button class="hero" style="--hc:' + h.color + '" data-act="start" data-hero="' + id + '">' +
+      '<div class="hh">' + sigil(id, 54) + '<div><div class="hn">' + h.name + '</div><div class="he">' + h.epithet + '</div></div></div>' +
+      facesRow(h) + '<p class="hs">' + h.style + '</p>' +
+      '<div class="go">Play ' + h.name.split(' ')[0] + ' against ' + foe.name.split(' ')[0] + ' &rarr;</div></button>';
+  };
+  return '<main class="start"><div><h1 class="logo">Ashes <span>&amp;</span> Tides</h1>' +
+    '<p class="tag">Five dice, three rolls, one combo. Build your turn, spend your cards, outlast your rival.</p></div>' +
+    continueView() +
+    (ui.saved ? '<h3 class="newduel">Or start a new duel</h3>' : '') +
+    '<div class="heroes">' + card('ember') + card('brine') + '</div>' +
+    '<div class="start-foot"><button class="linkbtn" data-act="rules">How a turn works</button><span class="rec">Record ' + r.w + '&ndash;' + r.l + (r.d ? '&ndash;' + r.d : '') + '</span></div>' +
+    '<p class="proto">A dice duel with original heroes, cards and art. You play against an AI opponent.</p></main>' +
+    (ui.sheet ? sheetView() : '');
+}
+
+/* ---------- game screen ---------- */
+function panelView(pi) {
+  const G = ui.G, p = G.players[pi], h = p.hero;
+  const pct = Math.min(100, Math.round(100 * p.hp / START_HP)), prev = ui.prevHp[pi];
+  ui.prevHp[pi] = pct;
+  const active = G.active === pi && G.phase !== 'over';
+  const chips = (p.shield ? chip('shield', 'shield', 'Shield ' + p.shield, 'Shield') : '') + (p.burn ? chip('burn', 'flame', 'Burn ' + p.burn, 'Burn') : '') +
+    (p.chill ? chip('chill', 'snow', 'Chill', 'Chill') : '') + (p.bonusDmg ? chip('boost', 'blade', 'Boost +' + p.bonusDmg, 'Boost') : '');
+  const ups = p.inPlay.length ? ' &middot; ' + p.inPlay.length + ' upgrade' + (p.inPlay.length > 1 ? 's' : '') : '';
+  return '<section class="panel ' + (pi === 1 ? 'opp' : 'me') + (active ? ' active' : '') + '" id="panel' + pi + '" style="--hc:' + h.color + '"' + (pi === 1 ? ' data-act="infoOpp"' : '') + '>' +
+    '<div class="p-top">' + sigil(h.id, 34) + '<div class="p-id"><div class="p-name">' + h.name + '</div><div class="p-sub">' + (pi === 0 ? 'You' : 'Opponent &middot; round ' + Math.ceil(G.turnNo / 2)) + (active ? (pi === 0 ? ' &middot; your turn' : ' &middot; their turn') : '') + '</div></div><div class="chips">' + chips + '</div></div>' +
+    '<div class="hpbar" role="img" aria-label="Health ' + p.hp + ' of ' + START_HP + '"><i class="hpfill" style="width:' + prev + '%" data-to="' + pct + '%"></i><b class="hpnum">' + p.hp + '<small>/' + START_HP + '</small></b></div>' +
+    '<div class="p-bot"><button class="cp" data-act="gloss" data-k="CP" aria-label="' + p.cp + ' combat points: what is this?"><span class="cpbar"><i style="width:' + Math.round(100 * p.cp / MAX_CP) + '%"></i></span><span class="cpn">' + p.cp + ' CP</span></button>' +
+    '<div>' + (pi === 1 ? 'Hand ' + p.hand.length + ' &middot; ' : '') + 'Deck ' + p.deck.length + ups + '</div></div></section>';
+}
+function logView() {
+  const G = ui.G, last = G.log.slice(-2);
+  return '<div class="logrow"><button class="logline" data-act="log" aria-label="Open history">' + last.map(l => '<span>' + l.t + '</span>').join('') + '</button><button class="menubtn hist-btn" data-act="log">History</button><button class="menubtn" data-act="menu">Menu</button></div>';
+}
+function trayModel(G) {
+  if (G.phase === 'defense' && G.pending && G.pending.def) {
+    const def = G.pending.def, owner = G.pending.defender;
+    return { owner, def: true, dice: def.rolled ? def.dice : Array.from({ length: def.n }, () => ({ face: null })), skip: def.skip };
+  }
+  return { owner: G.active, def: false, dice: G.dice };
+}
+function trayView() {
+  const G = ui.G, tm = trayModel(G), owner = G.players[tm.owner], h = owner.hero;
+  const me0 = actor(G) === 0;
+  const canHold = me0 && !tm.def && G.phase === 'roll' && G.rolled > 0 && G.rollsLeft > 0 && !ui.target && !G.prompt;
+  const tgt = !!(ui.target && ui.target.stage === 'dice');
+  const dice = tm.dice.map((d, i) => {
+    const sym = d.face == null ? null : h.faces[d.face];
+    const cls = 'die' + (sym ? '' : ' blank') + (d.held ? ' held' : '') + (ui.rolling.has(i) ? ' tumble' : '') + (tgt && sym ? ' tgt' : '') + (tgt && ui.target.picks.indexOf(i) >= 0 ? ' pick' : '');
+    const live = canHold || (tgt && sym);
+    return '<button class="' + cls + '" data-act="die" data-i="' + i + '"' + (live ? '' : ' disabled') + ' aria-label="Die ' + (i + 1) + (sym ? ', ' + SYMNAME[sym] + ' ' + (d.face + 1) : ', not rolled') + (d.held ? ', kept' : '') + '">' +
+      (sym ? ic(sym, 40) + '<span class="num">' + (d.face + 1) + '</span>' : '') + (d.held ? '<span class="keep">KEEP</span>' : '') + '</button>';
+  }).join('');
+  const whoTxt = tm.owner === 0 ? 'Your' : 'Rival&rsquo;s';
+  let label = whoTxt + ' dice', pips = '';
+  if (tm.def) label = whoTxt + ' defense &middot; ' + h.defense.name + (tm.skip ? ' (skipped)' : ' &middot; ' + tm.dice.length + ' dice, 1 roll');
+  else if (G.phase === 'roll') { for (let k = 0; k < 3; k++) pips += '<i class="pip' + (k < G.rollsLeft ? ' on' : '') + '"></i>'; }
+  return '<section class="table' + (tm.def ? ' defmode' : '') + '" style="--dink:' + h.ink + ';--hc:' + h.color + '">' + stepsView() +
+    '<div class="tlabel"><span>' + label + '</span><span class="pips" aria-label="Rolls left">' + pips + '</span></div>' +
+    '<div class="dice">' + dice + '</div>' + actionsView() + '</section>';
+}
+function stepsView() {
+  const G = ui.G;
+  if (G.phase === 'over') return '';
+  const nav = G.rolled > 0 ? availableAbilities(G, G.active).length : 0;
+  let cur = { main1: 0, defense: 2, main2: 3, discard: 3 }[G.phase];
+  if (G.phase === 'roll') cur = G.rolled > 0 && (nav > 0 || G.rollsLeft <= 0) ? 2 : 1;
+  const names = ['Cards', 'Roll', 'Ability', 'End'];
+  return '<ol class="steps" aria-label="' + (G.active === 0 ? 'Your' : 'Rival’s') + ' turn steps">' + names.map((n, i) => '<li class="' + (i === cur ? 'cur' : i < cur ? 'done' : '') + '"' + (i === cur ? ' aria-current="step"' : '') + '><b>' + (i + 1) + '</b>' + n + '</li>').join('') + '</ol>';
+}
+function waitView() {
+  const G = ui.G;
+  let t = 'Rival is thinking…';
+  if (G.prompt) t = 'Rival is deciding whether to respond…';
+  else if (G.phase === 'defense') t = G.pending.def.rolled || G.pending.def.skip ? 'Rival is deciding on their defense…' : 'Rival is rolling defense…';
+  else if (G.phase === 'roll') t = G.rolled ? 'Rival is choosing…' : 'Rival is rolling…';
+  else if (G.phase === 'main1' || G.phase === 'main2') t = 'Rival is playing cards…';
+  else if (G.phase === 'discard') t = 'Rival is selling cards…';
+  return '<div class="actions wait">' + t + '</div>';
+}
+function respondCards(G) {
+  const me = G.players[0];
+  return me.hand.map((id, i) => ({ id, i })).filter(x => CARDS[x.id].target && CARDS[x.id].target.who === 'opp' && canPlay(G, 0, x.i).ok);
+}
+function promptView() {
+  const G = ui.G, pr = G.prompt, opp = G.players[1];
+  let msg;
+  if (pr.kind === 'respond') {
+    const ab = opp.hero.abilities.find(a => a.id === pr.abId);
+    msg = 'Rival is about to use <b>' + abName(opp, ab) + '</b>' + (ab.ult ? ' (Ultimate)' : '') + ': ' + effText(abEff(opp, ab), opp.bonusDmg) + '. You can change one of their dice first.';
+  } else {
+    msg = 'Rival defends with <b>' + opp.hero.defense.name + '</b>: it ' + defSummary(defenseOutcome(G)) + '. You can change one of their defense dice.';
+  }
+  const btns = respondCards(G).map(x => '<button class="btn" data-act="quickplay" data-i="' + x.i + '">' + CARDS[x.id].name + ' <span class="n">' + CARDS[x.id].cost + ' CP</span></button>').join('');
+  return '<p class="msg">' + msg + '</p><div class="actions">' + btns + '<button class="btn primary" data-act="pass">' + (pr.kind === 'respond' ? 'Let it happen' : 'Continue') + '</button></div>';
+}
+function defenseView() {
+  const G = ui.G, pend = G.pending, def = pend.def, me = G.players[0], att = G.players[pend.attacker];
+  const m = hitMath(G), incoming = m.base + m.bonus;
+  if (def.skip) {
+    return '<p class="msg"><b>' + pend.name + '</b> is undefendable, so you can&rsquo;t roll defense. You will take <b>' + m.hp + '</b>.</p>' +
+      '<div class="actions"><button class="btn primary" data-act="defconfirm">Take ' + m.hp + ' damage</button></div><p class="hint">Instant cards like Parry still work: tap one in your hand.</p>';
+  }
+  if (!def.rolled) {
+    return '<p class="msg">' + att.hero.name + ' attacks with <b>' + pend.name + '</b> for <b>' + incoming + '</b>. Roll your defense, <b>' + me.hero.defense.name + '</b>: ' + me.hero.defense.text + '</p>' +
+      '<div class="actions"><button class="btn primary" data-act="defroll">Roll defense ' + ic('dice', 20) + ' <span class="n">' + def.n + ' dice</span></button></div>';
+  }
+  return '<p class="msg">' + me.hero.defense.name + ' ' + defSummary(defenseOutcome(G)) + '. You take <b>' + m.hp + '</b> of ' + incoming + '.</p>' +
+    '<div class="actions"><button class="btn primary" data-act="defconfirm">Confirm defense</button></div><p class="hint">You can still play a Roll card on your defense dice, or an Instant card.</p>';
+}
+function actionsView() {
+  const G = ui.G;
+  if (G.phase === 'over') return '';
+  if (ui.target) return targetBarView();
+  if (actor(G) !== 0) return waitView();
+  if (G.prompt) return promptView();
+  if (G.phase === 'defense') return defenseView();
+  if (G.phase === 'main1') {
+    const n = G.players[0].hand.filter((id, i) => canPlay(G, 0, i).ok).length;
+    return '<div class="actions"><button class="btn primary" data-act="rollstart">Roll dice ' + ic('dice', 20) + '</button></div><p class="hint">' +
+      (n ? 'You can play ' + n + ' card' + (n > 1 ? 's' : '') + ' first, or sell cards for CP. Tap a card. Or just roll.' : 'Roll the dice, or tap a card to sell it for 1 CP.') + '</p>';
+  }
+  if (G.phase === 'roll') {
+    const left = G.rollsLeft, av = G.rolled > 0 ? availableAbilities(G, 0) : [];
+    let use = '';
+    if (G.rolled > 0) {
+      const ab = av.find(x => x.id === ui.sel);
+      if (ab) use = '<button class="btn primary" data-act="use">Use ' + abName(G.players[0], ab) + '</button>';
+      else if (!av.length && left <= 0) use = '<button class="btn primary" data-act="skipab">No ability. Continue</button>';
+    }
+    const rollBtn = '<button class="btn' + (G.rolled === 0 ? ' primary' : '') + '" data-act="roll"' + (left <= 0 ? ' disabled' : '') + '>' + (G.rolled === 0 ? 'Roll dice' : 'Reroll') + ' <span class="n">' + left + ' left</span></button>';
+    const hint = G.rolled === 0 ? 'Roll all five dice. You get up to 3 rolls.' : left > 0 ? (av.length ? 'Gold abilities are ready. Use one now, or tap dice to keep them and reroll.' : 'Nothing matches yet. Tap the dice you want to keep, then reroll.') : (av.length ? 'No rolls left. Pick an ability.' : 'No rolls left and nothing matches.');
+    return '<div class="actions">' + rollBtn + use + '</div><p class="hint">' + hint + '</p>';
+  }
+  if (G.phase === 'main2') return '<div class="actions"><button class="btn primary" data-act="endturn">End turn</button></div><p class="hint">Play more cards, or sell cards you don&rsquo;t need for 1 CP each.</p>';
+  if (G.phase === 'discard') {
+    const extra = G.players[0].hand.length - HAND_LIMIT;
+    return '<p class="msg">Your hand is over the limit of ' + HAND_LIMIT + '. Sell <b>' + extra + '</b> more card' + (extra > 1 ? 's' : '') + ' for 1 CP each: tap a card, then Sell.</p>';
+  }
+  return '';
+}
+function targetBarView() {
+  const G = ui.G, t = ui.target, c = CARDS[G.players[0].hand[t.idx]], ls = liveSet(G);
+  if (t.stage === 'face') {
+    const h = G.players[ls.owner].hero;
+    const btns = h.faces.map((s, fi) => '<button class="fbtn" data-act="face" data-f="' + fi + '" aria-label="' + SYMNAME[s] + ' ' + (fi + 1) + '">' + ic(s, 26) + '<small>' + (fi + 1) + '</small></button>').join('');
+    return '<div class="tbar"><p class="hint">' + c.name + ': set die ' + (t.picks[0] + 1) + ' to</p><div class="faces-pick">' + btns + '</div><div class="actions"><button class="btn" data-act="cancelTarget">Cancel</button></div></div>';
+  }
+  const max = c.target.kind === 'face' ? 1 : (c.target.max || 1);
+  const whose = c.target.who === 'opp' ? 'one of your rival&rsquo;s dice' : (max > 1 ? 'up to ' + max + ' of your dice' : 'one of your dice');
+  return '<div class="tbar"><p class="hint">' + c.name + ': tap ' + whose + '.</p><div class="actions">' +
+    (max > 1 ? '<button class="btn primary" data-act="confirmTarget"' + (t.picks.length ? '' : ' disabled') + '>Reroll ' + (t.picks.length || '') + '</button>' : '') +
+    '<button class="btn" data-act="cancelTarget">Cancel</button></div></div>';
+}
+function abilitiesView() {
+  const G = ui.G, me = G.players[0], h = me.hero;
+  const live = G.phase === 'roll' && G.active === 0 && G.rolled > 0;
+  const faces = live ? G.dice.map(d => d.face) : null;
+  const av = live ? availableAbilities(G, 0).map(a => a.id) : [];
+  const defLv = level(me, h.defense.id);
+  return '<section class="abilities" data-keep="ab" style="--hc:' + h.color + '" aria-label="Your abilities">' + h.abilities.map(ab => {
+    const ok = av.indexOf(ab.id) >= 0, lv = level(me, ab.id);
+    return '<button class="ab' + (live ? ' live' : '') + (ok ? ' ok' : '') + (ui.sel === ab.id && ok ? ' sel' : '') + (lv > 1 ? ' up' : '') + '" data-act="ab" data-id="' + ab.id + '">' +
+      '<span class="nm">' + ab.name + (lv > 1 ? '<i>II</i>' : '') + (ab.ult ? '<i>ULT</i>' : '') + '</span><span class="rq">' + reqHTML(ab, h, faces) + '</span><span class="ef">' + effText(abEff(me, ab), me.bonusDmg) + '</span></button>';
+  }).join('') +
+    '<button class="ab def" data-act="defab"><span class="nm">' + h.defense.name + (defLv > 1 ? '<i>II</i>' : '') + '<i>DEF</i></span><span class="rq">' + ic('dice', 15) + ' &times;' + defN(me) + '</span><span class="ef">Defense roll when attacked</span></button>' +
+    '</section>';
+}
+function handView() {
+  const G = ui.G, me = G.players[0];
+  const discarding = G.phase === 'discard' && G.active === 0;
+  const cards = me.hand.map((id, i) => {
+    const c = CARDS[id], pl = canPlay(G, 0, i);
+    return '<button class="card t-' + c.type + (ui.selCard === i ? ' sel' : '') + (pl.ok || discarding ? '' : ' dim') + '" data-act="card" data-i="' + i + '">' +
+      '<span class="ci">' + ic(c.icon, 20) + '</span><span class="cc">' + c.cost + '</span><span class="cn">' + c.name + '</span><span class="ct">' + c.text + '</span><span class="cw">' + TYPE_LABEL[c.type] + '</span></button>';
+  }).join('');
+  return '<section class="handwrap"><div class="hand" data-keep="hand" aria-label="Your hand">' + (cards || '<p class="hint" style="padding:30px 0;flex:1">No cards in hand. You draw one each turn.</p>') + '</div></section>';
+}
+function cardSheetView() {
+  const G = ui.G, me = G.players[0], i = ui.selCard, c = CARDS[me.hand[i]], pl = canPlay(G, 0, i), sl = canSell(G, 0);
+  const discarding = G.phase === 'discard' && G.active === 0;
+  const play = pl.ok ? '<button class="btn primary" data-act="playcard">Play for ' + c.cost + ' CP</button>' : (discarding ? '' : '<button class="btn" disabled>Can&rsquo;t play now</button>');
+  const sell = sl.ok ? '<button class="btn' + (discarding ? ' primary' : '') + '" data-act="sell">Sell for 1 CP</button>' : '';
+  return '<div class="back" data-act="closeCard"></div><div class="sheet"><div class="in"><div class="cardhead t-' + c.type + '"><span class="ci">' + ic(c.icon, 26) + '</span><h2>' + c.name + '</h2><span class="cc big">' + c.cost + ' CP</span></div>' +
+    '<p class="tline t-' + c.type + '">' + TYPE_INFO[c.type] + '</p>' +
+    '<p class="cardtext">' + c.text + '</p>' + glossHTML(glossFor(c.text)) +
+    (pl.ok || discarding ? '' : '<p class="why">' + pl.why + '</p>') +
+    '<div class="actions">' + play + sell + '<button class="btn" data-act="closeCard">Close</button></div></div></div>';
+}
+function historyList() {
+  const G = ui.G, groups = [];
+  let cur = { start: true, items: [] };
+  groups.push(cur);
+  G.log.forEach(l => {
+    if (l.kind === 'turn') { cur = { head: l, items: [] }; groups.push(cur); }
+    else cur.items.push(l);
+  });
+  const ev = l => {
+    const pl = l.who >= 0 ? G.players[l.who] : null;
+    let dice = '';
+    if (l.dice && pl) dice = '<div class="dd" style="--ink:' + pl.hero.ink + '">' + l.dice.map(f => f == null ? '' : '<i>' + ic(pl.hero.faces[f], 16) + '<small>' + (f + 1) + '</small></i>').join('') +
+      '<small>' + (l.def ? 'defense roll' : l.rolls + (l.rolls === 1 ? ' roll' : ' rolls')) + '</small></div>';
+    return '<li class="ev' + (l.dice ? ' big' : '') + (l.who < 0 ? ' sys' : '') + '">' + l.t + dice + '</li>';
+  };
+  const html = groups.slice().reverse().map(g => {
+    if (g.start) return g.items.length ? '<section class="turn" style="--hc:var(--muted)"><h4>Setup</h4><ul>' + g.items.map(ev).join('') + '</ul></section>' : '';
+    const pi = g.head.who, h = G.players[pi].hero, hp = g.head.hp;
+    return '<section class="turn" style="--hc:' + h.color + '"><h4>Round ' + Math.ceil(g.head.turn / 2) + ' &middot; ' + (pi === 0 ? 'Your turn' : h.name) +
+      '<span>You ' + hp[0] + ' &middot; Rival ' + hp[1] + ' HP</span></h4><ul>' + (g.items.length ? g.items.map(ev).join('') : '<li class="ev sys">Nothing yet.</li>') + '</ul></section>';
+  }).join('');
+  return '<div class="hist">' + html + '</div>';
+}
+function historyView() {
+  return '<div class="sheethead"><h2>History</h2><button class="btn small" data-act="closeSheet">Close</button></div>' +
+    '<p class="when">Newest turn at the top. Health is shown as it was when each turn began.</p>' + historyList();
+}
+function sideView() {
+  return '<aside class="side" data-keep="side" aria-label="History"><div class="sidehead"><h3>History</h3><span>Newest first</span></div>' + historyList() + '</aside>';
+}
+function rulesBody(welcome) {
+  return '<h2>' + (welcome ? 'Welcome. Here is your turn' : 'How a turn works') + '</h2>' +
+    '<p>Take your rival from ' + START_HP + ' health to zero. A die roll-off decides who goes first. The four steps of each turn are shown above the dice.</p><ol>' +
+    '<li><b>Cards.</b> Gain 1 CP and draw a card (the first player skips this on turn 1). Play Main cards and Upgrades, or sell any card for 1 CP.</li>' +
+    '<li><b>Roll.</b> Roll five dice, up to 3 times. Tap a die to KEEP it, then reroll the rest. Roll cards can change dice.</li>' +
+    '<li><b>Ability.</b> Abilities glow gold when your dice match. Press Use. Your rival rolls their defense once, and either of you may answer with cards.</li>' +
+    '<li><b>End.</b> Play or sell more cards, then end your turn. Hold 6 cards at most: sell the rest.</li></ol>' +
+    '<h3>Card types</h3><ul class="types"><li class="t-main"><b>Main</b> your main phases</li><li class="t-roll"><b>Roll</b> during any roll, yours or your rival&rsquo;s</li><li class="t-instant"><b>Instant</b> whenever the game waits on you</li><li class="t-upgrade"><b>Upgrade</b> improves an ability for good</li></ul>' +
+    '<h3>Words to know</h3>' + glossHTML(['CP', 'Defense', 'Ultimate', 'Undefendable', 'Straight', 'Shield', 'Burn', 'Chill']);
+}
+function sheetView() {
+  const G = ui.G;
+  if (G && ui.screen === 'game' && G.phase === 'over' && ui.sheet !== 'log') {
+    const won = G.winner === 0, draw0 = G.winner === -1;
+    return '<div class="back"></div><div class="sheet"><div class="in over"><h2 class="' + (won ? 'win' : draw0 ? '' : 'lose') + '">' + (won ? 'Victory' : draw0 ? 'Draw' : 'Defeat') + '</h2>' +
+      '<p>' + (won ? 'You outlasted ' + G.players[1].hero.name + ' in ' + Math.ceil(G.turnNo / 2) + ' rounds.' : draw0 ? 'Both heroes fell at the same moment.' : G.players[1].hero.name + ' wins after ' + Math.ceil(G.turnNo / 2) + ' rounds.') + '</p>' +
+      '<div class="actions"><button class="btn primary" data-act="rematch">Rematch</button><button class="btn" data-act="home">Change hero</button></div><button class="linkbtn" data-act="log">See what happened</button></div></div>';
+  }
+  if (G && ui.screen === 'game' && ui.selCard != null && G.players[0].hand[ui.selCard]) return cardSheetView();
+  if (!ui.sheet) return '';
+  const close = '<div class="actions"><button class="btn" data-act="closeSheet">Close</button></div>';
+  let body = '';
+  if (ui.sheet === 'gloss') {
+    body = '<h2>' + ui.glossKey + '</h2><p class="cardtext">' + GLOSS[ui.glossKey] + '</p>' + close;
+  } else if (ui.sheet === 'ability') {
+    const me = G.players[0], hero = me.hero, ab = hero.abilities.find(a => a.id === ui.abId), eff = abEff(me, ab);
+    const next = ab.lv.length > level(me, ab.id) ? '<p class="when">Upgrade to level II: ' + effText(ab.lv[1]) + '.</p>' : '';
+    body = '<h2>' + abName(me, ab) + '</h2><div class="rq big" style="--hc:' + hero.color + '">' + reqHTML(ab, hero, null) + '</div>' +
+      '<p class="cardtext">' + effText(eff) + '</p><p class="when">Needs ' + reqText(ab) + ' on your dice.</p>' + next +
+      glossHTML(glossFor(effText(eff) + (ab.ult ? ' ultimate' : '') + (ab.straight ? ' straight' : ''))) + close;
+  } else if (ui.sheet === 'defense') {
+    const me = G.players[0], d = me.hero.defense;
+    body = '<h2>' + d.name + (level(me, d.id) > 1 ? ' II' : '') + '</h2><p class="cardtext">' + d.text + '</p><p class="when">When you are attacked, roll ' + defN(me) + ' dice once.' + (level(me, d.id) < 2 ? ' Its upgrade raises this to ' + d.lv[1].n + ' dice.' : '') + '</p>' +
+      glossHTML(['Defense', 'Undefendable', 'Ultimate']) + close;
+  } else if (ui.sheet === 'rules' || ui.sheet === 'welcome') {
+    body = rulesBody(ui.sheet === 'welcome') + (ui.sheet === 'welcome' ? '<div class="actions"><button class="btn primary" data-act="closeSheet">Let&rsquo;s play</button></div>' : close);
+  } else if (ui.sheet === 'opp') {
+    const op = G.players[1], h = op.hero;
+    body = '<h2>' + h.name + '</h2><p>' + h.style + '</p><h3>Dice faces</h3>' + facesRow(h) + '<h3>Abilities</h3>' + abilityRows(op) +
+      (op.inPlay.length ? '<h3>Upgrades in play</h3><p>' + op.inPlay.map(id => CARDS[id].name).join(', ') + '</p>' : '') +
+      '<h3>Words to know</h3>' + glossHTML(['Defense', 'Ultimate', 'Undefendable', 'Straight', 'Burn', 'Chill']) + close;
+  } else if (ui.sheet === 'log') {
+    body = historyView();
+  } else if (ui.sheet === 'menu') {
+    body = '<h2>Menu</h2><div class="menulist"><button class="btn" data-act="log">History</button><button class="btn" data-act="rules">How a turn works</button><button class="btn" data-act="infoOpp">Opponent&rsquo;s abilities</button><button class="btn" data-act="rematch">Restart duel</button><button class="btn" data-act="home">Leave to title screen</button></div><p class="when">Your duel is saved after every move. You can close the page and continue later.</p>' + close;
+  }
+  return '<div class="back" data-act="closeSheet"></div><div class="sheet" data-keep="sheet-' + ui.sheet + '"><div class="in">' + body + '</div></div>';
+}
+function gameView() {
+  return '<div class="game">' + panelView(1) + logView() + trayView() + abilitiesView() + panelView(0) + handView() + sideView() + sheetView() + '</div>';
+}
+
+/* ---------- render ---------- */
+function render() {
+  const keep = {};
+  $app.querySelectorAll('[data-keep]').forEach(el => { keep[el.dataset.keep] = [el.scrollLeft, el.scrollTop]; });
+  $app.innerHTML = ui.screen === 'start' ? startView() : gameView();
+  $app.querySelectorAll('[data-keep]').forEach(el => { const k = keep[el.dataset.keep]; if (k) { el.scrollLeft = k[0]; el.scrollTop = k[1]; } });
+  requestAnimationFrame(() => { $app.querySelectorAll('.hpfill').forEach(el => { el.style.width = el.dataset.to; }); });
+  spawnFx();
+}
+function spawnFx() {
+  const G = ui.G; if (!G || ui.screen !== 'game') return;
+  while (ui.fxSeen < G.fx.length) {
+    const f = G.fx[ui.fxSeen++], host = document.getElementById('panel' + f.pi);
+    if (!host) continue;
+    const s = document.createElement('span');
+    s.className = 'fxnum ' + f.type;
+    s.textContent = f.type === 'cp' ? '+' + f.n + ' CP' : (f.type === 'dmg' || f.type === 'burn' ? '−' : '+') + f.n;
+    host.appendChild(s); s.addEventListener('animationend', () => s.remove());
+  }
+}
+function setRolling(list) {
+  ui.rolling = new Set(list || []);
+  setTimeout(() => { ui.rolling = new Set(); }, 600);
+}
+function autoSelect() {
+  const G = ui.G;
+  if (!G || G.phase !== 'roll' || G.active !== 0 || G.rolled === 0) { ui.sel = null; return; }
+  const me = G.players[0], av = availableAbilities(G, 0);
+  if (!av.length) { ui.sel = null; return; }
+  if (ui.sel && av.some(a => a.id === ui.sel)) return;
+  const sc = a => scoreEff(G, 0, abEff(me, a), me.bonusDmg, a.ult);
+  ui.sel = av.reduce((b, a) => sc(a) > sc(b) ? a : b).id;
+}
+function sync() {
+  const G = ui.G; if (!G) return;
+  writeSave();
+  if (G.bannerSeq !== ui.bannerSeen) { ui.bannerSeen = G.bannerSeq; showToast(G.banner); }
+  if (ui.target && (actor(G) !== 0 || !liveSet(G) || !G.players[0].hand[ui.target.idx])) ui.target = null;
+  if (ui.selCard != null && !G.players[0].hand[ui.selCard]) ui.selCard = null;
+  autoSelect();
+  if (G.phase === 'over' && !ui.recorded) {
+    ui.recorded = true;
+    if (G.winner === 0) ui.rec.w++; else if (G.winner === 1) ui.rec.l++; else ui.rec.d++;
+    saveRec();
+  }
+}
+function needsAI(G) { const a = actor(G); return a >= 0 && !G.players[a].human; }
+async function drive() {
+  if (ui.driving) return;
+  ui.driving = true;
+  try {
+    for (;;) {
+      const G = ui.G;
+      if (!G || !needsAI(G)) break;
+      await sleep(G.prompt ? 700 : G.phase === 'defense' ? 1000 : G.phase === 'roll' && G.rolled > 0 ? 1100 : 750);
+      if (ui.G !== G || !needsAI(G)) break;
+      const r = aiAct(G);
+      if (!r) break;
+      if (r.rolled) setRolling(r.rolled);
+      sync(); render();
+    }
+  } finally { ui.driving = false; }
+}
+function after() { sync(); render(); drive(); }
+
+function resumeGame() {
+  const s = readSave();
+  if (!s) { ui.saved = null; showToast('That saved duel could not be loaded.'); render(); return; }
+  ui.G = s.G; ui.hero = s.hero || s.G.players[0].hero.id;
+  ui.screen = 'game'; ui.sel = null; ui.selCard = null; ui.target = null; ui.sheet = null; ui.rolling = new Set();
+  ui.prevHp = s.G.players.map(p => Math.min(100, Math.round(100 * p.hp / START_HP))); ui.fxSeen = 0; ui.bannerSeen = s.G.bannerSeq; ui.recorded = false; ui.welcomed = true;
+  ui.saved = null;
+  after();
+  showToast('Welcome back. Round ' + Math.ceil(s.G.turnNo / 2) + '.');
+}
+function startGame(heroId) {
+  const foe = heroId === 'ember' ? 'brine' : 'ember';
+  ui.G = newGame({ heroes: [heroId, foe], humans: [true, false] });
+  ui.screen = 'game'; ui.sel = null; ui.selCard = null; ui.target = null; ui.sheet = null; ui.rolling = new Set();
+  ui.prevHp = [100, 100]; ui.fxSeen = ui.G.fx.length; ui.bannerSeen = ui.G.bannerSeq - 1; ui.recorded = false; ui.hero = heroId;
+  let seen = ui.welcomed;
+  try { seen = seen || localStorage.getItem('ashes-tides-seen2') === '1'; localStorage.setItem('ashes-tides-seen2', '1'); } catch (e) { /* storage unavailable */ }
+  ui.welcomed = true;
+  if (!seen) ui.sheet = 'welcome';
+  after();
+}
+function beginPlay(i) {
+  const G = ui.G, chk = canPlay(G, 0, i);
+  if (!chk.ok) { showToast(chk.why); return; }
+  const c = CARDS[G.players[0].hand[i]];
+  ui.selCard = null;
+  if (c.target) ui.target = { idx: i, stage: 'dice', picks: [] };
+  else playCard(G, 0, i, {});
+}
+function playTargeted(arg) {
+  const G = ui.G, t = ui.target;
+  const r = playCard(G, 0, t.idx, arg);
+  ui.target = null; ui.selCard = null;
+  if (!r.ok) showToast(r.why); else setRolling(arg.dice);
+  after();
+}
+
+/* ---------- input ---------- */
+$app.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if (!el) return;
+  const ds = el.dataset, G = ui.G;
+  switch (ds.act) {
+    case 'start': startGame(ds.hero); return;
+    case 'resume': resumeGame(); return;
+    case 'rules': ui.sheet = 'rules'; render(); return;
+    case 'menu': ui.sheet = 'menu'; render(); return;
+    case 'log': ui.sheet = 'log'; render(); return;
+    case 'infoOpp': ui.sheet = 'opp'; render(); return;
+    case 'closeSheet': ui.sheet = null; render(); return;
+    case 'gloss': e.stopPropagation(); ui.glossKey = ds.k; ui.sheet = 'gloss'; render(); return;
+    case 'defab': ui.sheet = 'defense'; render(); return;
+    case 'rematch': startGame(ui.hero); return;
+    case 'home': ui.screen = 'start'; ui.sheet = null; ui.saved = readSave(); ui.G = null; render(); return;
+  }
+  if (!G) return;
+  switch (ds.act) {
+    case 'rollstart': if (actor(G) === 0 && G.phase === 'main1') { toRollPhase(G); const r = rollDice(G); if (r) setRolling(r); } break;
+    case 'roll': if (actor(G) === 0) { const r = rollDice(G); if (r) setRolling(r); } break;
+    case 'die': {
+      const i = +ds.i;
+      if (ui.target) {
+        const t = ui.target, ls = liveSet(G);
+        if (t.stage !== 'dice' || !ls || !ls.dice[i] || ls.dice[i].face == null) return;
+        const c = CARDS[G.players[0].hand[t.idx]], max = c.target.kind === 'face' ? 1 : (c.target.max || 1);
+        const pos = t.picks.indexOf(i);
+        if (pos >= 0) t.picks.splice(pos, 1); else t.picks.push(i);
+        if (t.picks.length > max) t.picks.shift();
+        if (c.target.kind === 'face') { if (t.picks.length) t.stage = 'face'; }
+        else if (max === 1 && t.picks.length) { playTargeted({ dice: t.picks.slice() }); return; }
+      } else toggleHold(G, i);
+      break;
+    }
+    case 'ab': {
+      const ok = G.phase === 'roll' && G.active === 0 && G.rolled > 0 && availableAbilities(G, 0).some(a => a.id === ds.id);
+      if (ok && ui.sel !== ds.id) ui.sel = ds.id;
+      else { ui.abId = ds.id; ui.sheet = 'ability'; }
+      break;
+    }
+    case 'use': if (ui.sel && actor(G) === 0) { const id = ui.sel; ui.sel = null; requestActivate(G, id); } break;
+    case 'skipab': if (actor(G) === 0) requestActivate(G, null); break;
+    case 'pass': if (G.prompt && G.prompt.pi === 0) passPrompt(G); break;
+    case 'defroll': { const r = rollDefense(G); if (r) setRolling(r); break; }
+    case 'defconfirm': if (actor(G) === 0) confirmDefense(G); break;
+    case 'endturn': endTurn(G); break;
+    case 'card': if (ui.target) { showToast('Pick a die first, or cancel.'); break; } ui.selCard = +ds.i; ui.sheet = null; break;
+    case 'closeCard': ui.selCard = null; break;
+    case 'playcard': if (ui.selCard != null) beginPlay(ui.selCard); break;
+    case 'quickplay': beginPlay(+ds.i); break;
+    case 'sell': if (ui.selCard != null) { const r = sellCard(G, 0, ui.selCard); ui.selCard = null; if (!r.ok) showToast(r.why); } break;
+    case 'cancelTarget': ui.target = null; break;
+    case 'confirmTarget': if (ui.target && ui.target.picks.length) { playTargeted({ dice: ui.target.picks.slice() }); return; } break;
+    case 'face': if (ui.target) { playTargeted({ dice: [ui.target.picks[0]], face: +ds.f }); return; } break;
+  }
+  after();
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (ui.target) { ui.target = null; render(); }
+  else if (ui.selCard != null) { ui.selCard = null; render(); }
+  else if (ui.sheet) { ui.sheet = null; render(); }
+});
+
+ui.saved = readSave();
+render();
+
+/* offline + home screen support when hosted on its own site */
+try {
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1') && document.querySelector('link[rel="manifest"]')) {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* offline support unavailable */ });
+  }
+} catch (e) { /* offline support unavailable */ }
+</script>
+</body>
+</html>

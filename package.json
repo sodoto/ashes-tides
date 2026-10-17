@@ -1,0 +1,10 @@
+{
+  "name": "ashes-tides",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A dice duel game with an AI opponent.",
+  "scripts": {
+    "build": "./build.sh",
+    "test": "node tests/savetest.js && node tests/sim.js 200"
+  }
+}
