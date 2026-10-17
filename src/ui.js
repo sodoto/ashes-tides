@@ -2,7 +2,7 @@
 /* ===== UI ===== */
 const $app = document.getElementById('app');
 const $toast = document.getElementById('toast');
-const GAME_VERSION = '__VERSION__'; /* filled in by build.sh from VERSION in sw.js */
+const GAME_VERSION = '__VERSION__'; /* filled in by build.sh from package.json */
 
 const ICONS = {
   blade: '<path d="M19 5 9.5 14.5" stroke-width="3.2"/><path d="m6.5 12.5 5 5"/><path d="M8.5 15.5 5 19"/>',

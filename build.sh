@@ -5,9 +5,10 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-# the version shown in the game comes from sw.js, so bumping VERSION there updates both
-VERSION=$(sed -n "s/^const VERSION = 'ashes-tides-\(.*\)';.*/\1/p" sw.js)
-[ -n "$VERSION" ] || { echo "build.sh: no VERSION found in sw.js" >&2; exit 1; }
+# the version lives in package.json; it is stamped into sw.js (so installed copies update) and shown in the game
+VERSION=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' package.json | head -n 1)
+[ -n "$VERSION" ] || { echo "build.sh: no version found in package.json" >&2; exit 1; }
+sed -i "s/^const VERSION = '[^']*';/const VERSION = 'ashes-tides-$VERSION';/" sw.js
 
 body() { cat src/head.html src/engine.js src/ui.js | sed "s/__VERSION__/$VERSION/g"; echo '</script>'; }
 
