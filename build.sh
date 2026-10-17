@@ -5,7 +5,11 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-body() { cat src/head.html src/engine.js src/ui.js; echo '</script>'; }
+# the version shown in the game comes from sw.js, so bumping VERSION there updates both
+VERSION=$(sed -n "s/^const VERSION = 'ashes-tides-\(.*\)';.*/\1/p" sw.js)
+[ -n "$VERSION" ] || { echo "build.sh: no VERSION found in sw.js" >&2; exit 1; }
+
+body() { cat src/head.html src/engine.js src/ui.js | sed "s/__VERSION__/$VERSION/g"; echo '</script>'; }
 
 body > artifact.html
 

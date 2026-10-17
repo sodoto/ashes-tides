@@ -30,7 +30,7 @@ npm test            # rules simulation + save/restore determinism
 python3 -m http.server 8000   # then open http://localhost:8000
 ```
 
-After changing the game, bump `VERSION` in `sw.js` so installed copies pick up the update.
+After changing the game, bump `VERSION` in `sw.js` so installed copies pick up the update. `build.sh` copies it into the game, which shows it on the title screen and in the menu.
 
 ## Deploy on GitHub Pages
 

@@ -118,6 +118,12 @@ button{font:inherit;color:inherit}
 .ab.ok{border-color:var(--gold);background:#2a2d3b}
 .ab.ok .ef{color:var(--text)}
 .ab.sel{outline:2px solid var(--gold);background:#3a3520}
+.abtag{flex:0 0 64px;margin:0;scroll-snap-align:start;align-self:center;font:700 11px var(--body);letter-spacing:.08em;text-transform:uppercase;line-height:1.25;color:var(--hc)}
+.abilities.rival .ab{cursor:help}
+/* response odds under the rival's dice */
+.die .odds{position:absolute;left:0;right:0;bottom:-22px;text-align:center;font:700 12px var(--num);letter-spacing:.06em;color:#b3a186}
+.die.key{box-shadow:0 0 0 3px var(--gold),0 4px 0 var(--bone-lo),0 9px 14px rgba(0,0,0,.45)}
+.die.key .odds{color:var(--gold)}
 
 /* hand */
 .handwrap{position:relative;margin-top:auto}
@@ -265,6 +271,7 @@ small.ult{color:var(--gold);font:700 10px var(--num);letter-spacing:.12em}
 .linkbtn{background:none;border:0;padding:8px 0;color:var(--gold);font:600 15px var(--body);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .rec{font:600 14px var(--num);letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
 .proto{margin:0;font-size:13px;color:var(--muted)}
+.ver{white-space:nowrap;font-family:var(--num);letter-spacing:.04em}
 
 /* desktop: side history hidden on phones */
 .side{display:none}
@@ -283,6 +290,7 @@ small.ult{color:var(--gold);font:700 10px var(--num);letter-spacing:.12em}
   .logline,.hist-btn{display:none}
   .abilities{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));overflow:visible;padding:0;margin:0;align-content:start;scroll-snap-type:none}
   .ab{min-height:78px}
+  .abtag{grid-column:1/-1}
   .hand{flex-wrap:wrap;overflow:visible;padding:4px 0 0;margin:0}
   .card{flex:0 0 136px;height:160px}
   .card .ct{font-size:13px}

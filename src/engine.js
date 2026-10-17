@@ -356,6 +356,28 @@ function confirmDefense(G) {
   resolveAttack(G);
   return true;
 }
+/* During a response prompt: for each die of the live roll, in how many of its 6 faces a reroll helps the responder.
+   Answering an attack, that means the announced ability no longer matches; answering a defense, that the hit lands harder. */
+function rerollOdds(G) {
+  const pr = G.prompt, ls = liveSet(G);
+  if (!pr || !ls) return null;
+  const owner = G.players[ls.owner], dice = ls.dice;
+  let helps;
+  if (pr.kind === 'respond') {
+    const ab = owner.hero.abilities.find(a => a.id === pr.abId);
+    helps = () => !faceMet(owner.hero, ab, dice.map(d => d.face));
+  } else {
+    const val = () => { const m = hitMath(G); return m.hp - m.counter - m.defHeal - m.burnBack; };
+    const base = val();
+    helps = () => val() > base;
+  }
+  return dice.map(d => {
+    const keep = d.face; let n = 0;
+    for (let f = 0; f < 6; f++) { d.face = f; if (helps()) n++; }
+    d.face = keep;
+    return n;
+  });
+}
 function passPrompt(G) {
   const pr = G.prompt;
   if (!pr) return false;
@@ -688,6 +710,6 @@ function aiPrompt(G, pi) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { HEROES, CARDS, START_HP, MAX_HP, MAX_CP, HAND_LIMIT, SAVE_VERSION, newGame, toRollPhase, rollDice, toggleHold, requestActivate, passPrompt,
-    rollDefense, confirmDefense, hitMath, defenseOutcome, playCard, canPlay, sellCard, canSell, endTurn, availableAbilities, aiAct, actor, liveSet,
+    rollDefense, confirmDefense, hitMath, rerollOdds, defenseOutcome, playCard, canPlay, sellCard, canSell, endTurn, availableAbilities, aiAct, actor, liveSet,
     effText, scoreEff, abEff, level, serializeGame, restoreGame, faceMet, reqText };
 }

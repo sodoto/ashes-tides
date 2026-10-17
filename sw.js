@@ -1,5 +1,5 @@
 /* Offline support: serve the game from cache, refresh it in the background. Bump VERSION to force an update. */
-const VERSION = 'ashes-tides-v1';
+const VERSION = 'ashes-tides-v2';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

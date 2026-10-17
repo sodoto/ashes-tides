@@ -2,6 +2,7 @@
 /* ===== UI ===== */
 const $app = document.getElementById('app');
 const $toast = document.getElementById('toast');
+const GAME_VERSION = '__VERSION__'; /* filled in by build.sh from VERSION in sw.js */
 
 const ICONS = {
   blade: '<path d="M19 5 9.5 14.5" stroke-width="3.2"/><path d="m6.5 12.5 5 5"/><path d="M8.5 15.5 5 19"/>',
@@ -170,7 +171,7 @@ function startView() {
     (ui.saved ? '<h3 class="newduel">Or start a new duel</h3>' : '') +
     '<div class="heroes">' + card('ember') + card('brine') + '</div>' +
     '<div class="start-foot"><button class="linkbtn" data-act="rules">How a turn works</button><span class="rec">Record ' + r.w + '&ndash;' + r.l + (r.d ? '&ndash;' + r.d : '') + '</span></div>' +
-    '<p class="proto">A dice duel with original heroes, cards and art. You play against an AI opponent.</p></main>' +
+    '<p class="proto">A dice duel with original heroes, cards and art. You play against an AI opponent. <span class="ver">Version ' + GAME_VERSION + '</span></p></main>' +
     (ui.sheet ? sheetView() : '');
 }
 
@@ -205,12 +206,16 @@ function trayView() {
   const me0 = actor(G) === 0;
   const canHold = me0 && !tm.def && G.phase === 'roll' && G.rolled > 0 && G.rollsLeft > 0 && !ui.target && !G.prompt;
   const tgt = !!(ui.target && ui.target.stage === 'dice');
+  /* while you can answer the rival's roll, each die shows how often rerolling it works in your favour */
+  const odds = G.prompt && G.prompt.pi === 0 && tm.owner === 1 ? rerollOdds(G) : null;
+  const best = odds ? Math.max.apply(null, odds) : 0;
   const dice = tm.dice.map((d, i) => {
     const sym = d.face == null ? null : h.faces[d.face];
-    const cls = 'die' + (sym ? '' : ' blank') + (d.held ? ' held' : '') + (ui.rolling.has(i) ? ' tumble' : '') + (tgt && sym ? ' tgt' : '') + (tgt && ui.target.picks.indexOf(i) >= 0 ? ' pick' : '');
+    const held = d.held && !odds, o = odds ? odds[i] : 0;
+    const cls = 'die' + (sym ? '' : ' blank') + (held ? ' held' : '') + (ui.rolling.has(i) ? ' tumble' : '') + (tgt && sym ? ' tgt' : '') + (tgt && ui.target.picks.indexOf(i) >= 0 ? ' pick' : '') + (o && o === best ? ' key' : '');
     const live = canHold || (tgt && sym);
-    return '<button class="' + cls + '" data-act="die" data-i="' + i + '"' + (live ? '' : ' disabled') + ' aria-label="Die ' + (i + 1) + (sym ? ', ' + SYMNAME[sym] + ' ' + (d.face + 1) : ', not rolled') + (d.held ? ', kept' : '') + '">' +
-      (sym ? ic(sym, 40) + '<span class="num">' + (d.face + 1) + '</span>' : '') + (d.held ? '<span class="keep">KEEP</span>' : '') + '</button>';
+    return '<button class="' + cls + '" data-act="die" data-i="' + i + '"' + (live ? '' : ' disabled') + ' aria-label="Die ' + (i + 1) + (sym ? ', ' + SYMNAME[sym] + ' ' + (d.face + 1) : ', not rolled') + (held ? ', kept' : '') + (odds ? ', a reroll helps you ' + o + ' times in 6' : '') + '">' +
+      (sym ? ic(sym, 40) + '<span class="num">' + (d.face + 1) + '</span>' : '') + (held ? '<span class="keep">KEEP</span>' : '') + (odds ? '<span class="odds">' + o + '/6</span>' : '') + '</button>';
   }).join('');
   const whoTxt = tm.owner === 0 ? 'Your' : 'Rival&rsquo;s';
   let label = whoTxt + ' dice', pips = '';
@@ -248,9 +253,11 @@ function promptView() {
   let msg;
   if (pr.kind === 'respond') {
     const ab = opp.hero.abilities.find(a => a.id === pr.abId);
-    msg = 'Rival is about to use <b>' + abName(opp, ab) + '</b>' + (ab.ult ? ' (Ultimate)' : '') + ': ' + effText(abEff(opp, ab), opp.bonusDmg) + '. You can change one of their dice first.';
+    msg = 'Rival is about to use <b>' + abName(opp, ab) + '</b>' + (ab.ult ? ' (Ultimate)' : '') + ': ' + effText(abEff(opp, ab), opp.bonusDmg) + ', needing ' + reqText(ab) + '. You can change one of their dice first. ' +
+      'Under each die: how often a reroll breaks it.';
   } else {
-    msg = 'Rival defends with <b>' + opp.hero.defense.name + '</b>: it ' + defSummary(defenseOutcome(G)) + '. You can change one of their defense dice.';
+    msg = 'Rival defends with <b>' + opp.hero.defense.name + '</b>: it ' + defSummary(defenseOutcome(G)) + '. You can change one of their defense dice. ' +
+      'Under each die: how often a reroll weakens their defense.';
   }
   const btns = respondCards(G).map(x => '<button class="btn" data-act="quickplay" data-i="' + x.i + '">' + CARDS[x.id].name + ' <span class="n">' + CARDS[x.id].cost + ' CP</span></button>').join('');
   return '<p class="msg">' + msg + '</p><div class="actions">' + btns + '<button class="btn primary" data-act="pass">' + (pr.kind === 'respond' ? 'Let it happen' : 'Continue') + '</button></div>';
@@ -313,8 +320,22 @@ function targetBarView() {
     (max > 1 ? '<button class="btn primary" data-act="confirmTarget"' + (t.picks.length ? '' : ' disabled') + '>Reroll ' + (t.picks.length || '') + '</button>' : '') +
     '<button class="btn" data-act="cancelTarget">Cancel</button></div></div>';
 }
+/* while the rival rolls to attack, show their abilities against their dice instead of yours */
+function rivalAbilitiesView() {
+  const G = ui.G, op = G.players[1], h = op.hero, faces = G.dice.map(d => d.face);
+  const announced = G.prompt && G.prompt.kind === 'respond' ? G.prompt.abId : null;
+  /* the ability they announced first, then the others their dice already match */
+  const rank = ab => ab.id === announced ? 0 : faceMet(h, ab, faces) ? 1 : 2;
+  const list = h.abilities.slice().sort((a, b) => rank(a) - rank(b));
+  return '<section class="abilities rival" data-keep="ab-rival-' + (announced || '') + '" style="--hc:' + h.color + '" aria-label="Rival’s abilities"><p class="abtag">Rival&rsquo;s abilities</p>' + list.map(ab => {
+    const ok = faceMet(h, ab, faces), lv = level(op, ab.id);
+    return '<button class="ab live' + (ok ? ' ok' : '') + (ab.id === announced ? ' sel' : '') + (lv > 1 ? ' up' : '') + '" data-act="infoOpp">' +
+      '<span class="nm">' + ab.name + (lv > 1 ? '<i>II</i>' : '') + (ab.ult ? '<i>ULT</i>' : '') + '</span><span class="rq">' + reqHTML(ab, h, faces) + '</span><span class="ef">' + effText(abEff(op, ab), op.bonusDmg) + '</span></button>';
+  }).join('') + '</section>';
+}
 function abilitiesView() {
   const G = ui.G, me = G.players[0], h = me.hero;
+  if (G.phase === 'roll' && G.active === 1 && G.rolled > 0) return rivalAbilitiesView();
   const live = G.phase === 'roll' && G.active === 0 && G.rolled > 0;
   const faces = live ? G.dice.map(d => d.face) : null;
   const av = live ? availableAbilities(G, 0).map(a => a.id) : [];
@@ -422,7 +443,7 @@ function sheetView() {
   } else if (ui.sheet === 'log') {
     body = historyView();
   } else if (ui.sheet === 'menu') {
-    body = '<h2>Menu</h2><div class="menulist"><button class="btn" data-act="log">History</button><button class="btn" data-act="rules">How a turn works</button><button class="btn" data-act="infoOpp">Opponent&rsquo;s abilities</button><button class="btn" data-act="rematch">Restart duel</button><button class="btn" data-act="home">Leave to title screen</button></div><p class="when">Your duel is saved after every move. You can close the page and continue later.</p>' + close;
+    body = '<h2>Menu</h2><div class="menulist"><button class="btn" data-act="log">History</button><button class="btn" data-act="rules">How a turn works</button><button class="btn" data-act="infoOpp">Opponent&rsquo;s abilities</button><button class="btn" data-act="rematch">Restart duel</button><button class="btn" data-act="home">Leave to title screen</button></div><p class="when">Your duel is saved after every move. You can close the page and continue later.</p><p class="when ver">Version ' + GAME_VERSION + '</p>' + close;
   }
   return '<div class="back" data-act="closeSheet"></div><div class="sheet" data-keep="sheet-' + ui.sheet + '"><div class="in">' + body + '</div></div>';
 }
