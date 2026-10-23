@@ -1,6 +1,6 @@
 {
   "name": "ashes-tides",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "A dice duel game with an AI opponent.",
   "scripts": {

@@ -296,7 +296,8 @@ function requestActivate(G, abId) {
   if (G.rolled === 0) return false;
   const ab = p.hero.abilities.find(a => a.id === abId);
   if (!ab || !faceMet(p.hero, ab, G.dice.map(d => d.face))) return false;
-  if (hasOppDiceCard(G, 1 - pi)) { G.prompt = { pi: 1 - pi, kind: 'respond', abId, played: false }; return true; }
+  /* announcing an ability ends the rolling: if the opponent changes a die, the attacker can't reroll it back */
+  if (hasOppDiceCard(G, 1 - pi)) { G.rollsLeft = 0; G.dice.forEach(d => { d.held = false; }); G.prompt = { pi: 1 - pi, kind: 'respond', abId, played: false }; return true; }
   activate(G, abId);
   return true;
 }
@@ -356,6 +357,12 @@ function confirmDefense(G) {
   resolveAttack(G);
   return true;
 }
+/* During a 'respond' prompt: whether the attacker's dice still match the ability they announced. */
+function announcedMet(G) {
+  const pr = G.prompt, p = G.players[G.active];
+  if (!pr || pr.kind !== 'respond') return false;
+  return faceMet(p.hero, p.hero.abilities.find(a => a.id === pr.abId), G.dice.map(d => d.face));
+}
 /* During a response prompt: for each die of the live roll, in how many of its 6 faces a reroll helps the responder.
    Answering an attack, that means the announced ability no longer matches; answering a defense, that the hit lands harder. */
 function rerollOdds(G) {
@@ -364,6 +371,7 @@ function rerollOdds(G) {
   const owner = G.players[ls.owner], dice = ls.dice;
   let helps;
   if (pr.kind === 'respond') {
+    if (!announcedMet(G)) return null;
     const ab = owner.hero.abilities.find(a => a.id === pr.abId);
     helps = () => !faceMet(owner.hero, ab, dice.map(d => d.face));
   } else {
@@ -381,6 +389,10 @@ function rerollOdds(G) {
 function passPrompt(G) {
   const pr = G.prompt;
   if (!pr) return false;
+  if (pr.kind === 'respond' && pr.played && !announcedMet(G)) {
+    const p = G.players[G.active];
+    log(G, p.hero.abilities.find(a => a.id === pr.abId).name + ' no longer matches ' + p.hero.name + '’s dice.', 1 - G.active);
+  }
   G.prompt = null;
   if (pr.kind === 'respond' && !pr.played) activate(G, pr.abId);
   else if (pr.kind === 'respondDef' && !pr.played) resolveAttack(G);
@@ -710,6 +722,6 @@ function aiPrompt(G, pi) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { HEROES, CARDS, START_HP, MAX_HP, MAX_CP, HAND_LIMIT, SAVE_VERSION, newGame, toRollPhase, rollDice, toggleHold, requestActivate, passPrompt,
-    rollDefense, confirmDefense, hitMath, rerollOdds, defenseOutcome, playCard, canPlay, sellCard, canSell, endTurn, availableAbilities, aiAct, actor, liveSet,
+    rollDefense, confirmDefense, hitMath, rerollOdds, announcedMet, defenseOutcome, playCard, canPlay, sellCard, canSell, endTurn, availableAbilities, aiAct, actor, liveSet,
     effText, scoreEff, abEff, level, serializeGame, restoreGame, faceMet, reqText };
 }

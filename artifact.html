@@ -607,7 +607,8 @@ function requestActivate(G, abId) {
   if (G.rolled === 0) return false;
   const ab = p.hero.abilities.find(a => a.id === abId);
   if (!ab || !faceMet(p.hero, ab, G.dice.map(d => d.face))) return false;
-  if (hasOppDiceCard(G, 1 - pi)) { G.prompt = { pi: 1 - pi, kind: 'respond', abId, played: false }; return true; }
+  /* announcing an ability ends the rolling: if the opponent changes a die, the attacker can't reroll it back */
+  if (hasOppDiceCard(G, 1 - pi)) { G.rollsLeft = 0; G.dice.forEach(d => { d.held = false; }); G.prompt = { pi: 1 - pi, kind: 'respond', abId, played: false }; return true; }
   activate(G, abId);
   return true;
 }
@@ -667,6 +668,12 @@ function confirmDefense(G) {
   resolveAttack(G);
   return true;
 }
+/* During a 'respond' prompt: whether the attacker's dice still match the ability they announced. */
+function announcedMet(G) {
+  const pr = G.prompt, p = G.players[G.active];
+  if (!pr || pr.kind !== 'respond') return false;
+  return faceMet(p.hero, p.hero.abilities.find(a => a.id === pr.abId), G.dice.map(d => d.face));
+}
 /* During a response prompt: for each die of the live roll, in how many of its 6 faces a reroll helps the responder.
    Answering an attack, that means the announced ability no longer matches; answering a defense, that the hit lands harder. */
 function rerollOdds(G) {
@@ -675,6 +682,7 @@ function rerollOdds(G) {
   const owner = G.players[ls.owner], dice = ls.dice;
   let helps;
   if (pr.kind === 'respond') {
+    if (!announcedMet(G)) return null;
     const ab = owner.hero.abilities.find(a => a.id === pr.abId);
     helps = () => !faceMet(owner.hero, ab, dice.map(d => d.face));
   } else {
@@ -692,6 +700,10 @@ function rerollOdds(G) {
 function passPrompt(G) {
   const pr = G.prompt;
   if (!pr) return false;
+  if (pr.kind === 'respond' && pr.played && !announcedMet(G)) {
+    const p = G.players[G.active];
+    log(G, p.hero.abilities.find(a => a.id === pr.abId).name + ' no longer matches ' + p.hero.name + '’s dice.', 1 - G.active);
+  }
   G.prompt = null;
   if (pr.kind === 'respond' && !pr.played) activate(G, pr.abId);
   else if (pr.kind === 'respondDef' && !pr.played) resolveAttack(G);
@@ -1021,14 +1033,14 @@ function aiPrompt(G, pi) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { HEROES, CARDS, START_HP, MAX_HP, MAX_CP, HAND_LIMIT, SAVE_VERSION, newGame, toRollPhase, rollDice, toggleHold, requestActivate, passPrompt,
-    rollDefense, confirmDefense, hitMath, rerollOdds, defenseOutcome, playCard, canPlay, sellCard, canSell, endTurn, availableAbilities, aiAct, actor, liveSet,
+    rollDefense, confirmDefense, hitMath, rerollOdds, announcedMet, defenseOutcome, playCard, canPlay, sellCard, canSell, endTurn, availableAbilities, aiAct, actor, liveSet,
     effText, scoreEff, abEff, level, serializeGame, restoreGame, faceMet, reqText };
 }
 
 /* ===== UI ===== */
 const $app = document.getElementById('app');
 const $toast = document.getElementById('toast');
-const GAME_VERSION = '1.1.0'; /* filled in by build.sh from package.json */
+const GAME_VERSION = '1.1.1'; /* filled in by build.sh from package.json */
 
 const ICONS = {
   blade: '<path d="M19 5 9.5 14.5" stroke-width="3.2"/><path d="m6.5 12.5 5 5"/><path d="M8.5 15.5 5 19"/>',
@@ -1277,16 +1289,20 @@ function respondCards(G) {
 function promptView() {
   const G = ui.G, pr = G.prompt, opp = G.players[1];
   let msg;
-  if (pr.kind === 'respond') {
+  if (pr.kind === 'respond' && pr.played && !announcedMet(G)) {
+    const ab = opp.hero.abilities.find(a => a.id === pr.abId), other = availableAbilities(G, 1);
+    msg = 'You broke <b>' + abName(opp, ab) + '</b>: their dice no longer match it, and they can&rsquo;t reroll. ' +
+      (other.length ? 'They can still use ' + other.map(a => '<b>' + abName(opp, a) + '</b>').join(' or ') + ', which these dice match.' : 'Nothing else matches, so no attack unless they fix their dice with a card.');
+  } else if (pr.kind === 'respond') {
     const ab = opp.hero.abilities.find(a => a.id === pr.abId);
-    msg = 'Rival is about to use <b>' + abName(opp, ab) + '</b>' + (ab.ult ? ' (Ultimate)' : '') + ': ' + effText(abEff(opp, ab), opp.bonusDmg) + ', needing ' + reqText(ab) + '. You can change one of their dice first. ' +
+    msg = (pr.played ? 'Your card didn&rsquo;t break it. ' : '') +'Rival is about to use <b>' + abName(opp, ab) + '</b>' + (ab.ult ? ' (Ultimate)' : '') + ': ' + effText(abEff(opp, ab), opp.bonusDmg) + ', needing ' + reqText(ab) + '. You can change one of their dice first. ' +
       'Under each die: how often a reroll breaks it.';
   } else {
     msg = 'Rival defends with <b>' + opp.hero.defense.name + '</b>: it ' + defSummary(defenseOutcome(G)) + '. You can change one of their defense dice. ' +
       'Under each die: how often a reroll weakens their defense.';
   }
   const btns = respondCards(G).map(x => '<button class="btn" data-act="quickplay" data-i="' + x.i + '">' + CARDS[x.id].name + ' <span class="n">' + CARDS[x.id].cost + ' CP</span></button>').join('');
-  return '<p class="msg">' + msg + '</p><div class="actions">' + btns + '<button class="btn primary" data-act="pass">' + (pr.kind === 'respond' ? 'Let it happen' : 'Continue') + '</button></div>';
+  return '<p class="msg">' + msg + '</p><div class="actions">' + btns + '<button class="btn primary" data-act="pass">' + (pr.kind === 'respond' && announcedMet(G) ? 'Let it happen' : 'Continue') + '</button></div>';
 }
 function defenseView() {
   const G = ui.G, pend = G.pending, def = pend.def, me = G.players[0], att = G.players[pend.attacker];
@@ -1349,7 +1365,7 @@ function targetBarView() {
 /* while the rival rolls to attack, show their abilities against their dice instead of yours */
 function rivalAbilitiesView() {
   const G = ui.G, op = G.players[1], h = op.hero, faces = G.dice.map(d => d.face);
-  const announced = G.prompt && G.prompt.kind === 'respond' ? G.prompt.abId : null;
+  const announced = announcedMet(G) ? G.prompt.abId : null;
   /* the ability they announced first, then the others their dice already match */
   const rank = ab => ab.id === announced ? 0 : faceMet(h, ab, faces) ? 1 : 2;
   const list = h.abilities.slice().sort((a, b) => rank(a) - rank(b));
@@ -1430,7 +1446,7 @@ function rulesBody(welcome) {
     '<p>Take your rival from ' + START_HP + ' health to zero. A die roll-off decides who goes first. The four steps of each turn are shown above the dice.</p><ol>' +
     '<li><b>Cards.</b> Gain 1 CP and draw a card (the first player skips this on turn 1). Play Main cards and Upgrades, or sell any card for 1 CP.</li>' +
     '<li><b>Roll.</b> Roll five dice, up to 3 times. Tap a die to KEEP it, then reroll the rest. Roll cards can change dice.</li>' +
-    '<li><b>Ability.</b> Abilities glow gold when your dice match. Press Use. Your rival rolls their defense once, and either of you may answer with cards.</li>' +
+    '<li><b>Ability.</b> Abilities glow gold when your dice match. Press Use: that ends your rolling, and your rival may answer by changing one of your dice. If it no longer matches, you can only use an ability your dice still match. Your rival rolls their defense once, and either of you may answer with cards.</li>' +
     '<li><b>End.</b> Play or sell more cards, then end your turn. Hold 6 cards at most: sell the rest.</li></ol>' +
     '<h3>Card types</h3><ul class="types"><li class="t-main"><b>Main</b> your main phases</li><li class="t-roll"><b>Roll</b> during any roll, yours or your rival&rsquo;s</li><li class="t-instant"><b>Instant</b> whenever the game waits on you</li><li class="t-upgrade"><b>Upgrade</b> improves an ability for good</li></ul>' +
     '<h3>Words to know</h3>' + glossHTML(['CP', 'Defense', 'Ultimate', 'Undefendable', 'Straight', 'Shield', 'Burn', 'Chill']);

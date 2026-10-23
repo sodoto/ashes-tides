@@ -251,16 +251,20 @@ function respondCards(G) {
 function promptView() {
   const G = ui.G, pr = G.prompt, opp = G.players[1];
   let msg;
-  if (pr.kind === 'respond') {
+  if (pr.kind === 'respond' && pr.played && !announcedMet(G)) {
+    const ab = opp.hero.abilities.find(a => a.id === pr.abId), other = availableAbilities(G, 1);
+    msg = 'You broke <b>' + abName(opp, ab) + '</b>: their dice no longer match it, and they can&rsquo;t reroll. ' +
+      (other.length ? 'They can still use ' + other.map(a => '<b>' + abName(opp, a) + '</b>').join(' or ') + ', which these dice match.' : 'Nothing else matches, so no attack unless they fix their dice with a card.');
+  } else if (pr.kind === 'respond') {
     const ab = opp.hero.abilities.find(a => a.id === pr.abId);
-    msg = 'Rival is about to use <b>' + abName(opp, ab) + '</b>' + (ab.ult ? ' (Ultimate)' : '') + ': ' + effText(abEff(opp, ab), opp.bonusDmg) + ', needing ' + reqText(ab) + '. You can change one of their dice first. ' +
+    msg = (pr.played ? 'Your card didn&rsquo;t break it. ' : '') +'Rival is about to use <b>' + abName(opp, ab) + '</b>' + (ab.ult ? ' (Ultimate)' : '') + ': ' + effText(abEff(opp, ab), opp.bonusDmg) + ', needing ' + reqText(ab) + '. You can change one of their dice first. ' +
       'Under each die: how often a reroll breaks it.';
   } else {
     msg = 'Rival defends with <b>' + opp.hero.defense.name + '</b>: it ' + defSummary(defenseOutcome(G)) + '. You can change one of their defense dice. ' +
       'Under each die: how often a reroll weakens their defense.';
   }
   const btns = respondCards(G).map(x => '<button class="btn" data-act="quickplay" data-i="' + x.i + '">' + CARDS[x.id].name + ' <span class="n">' + CARDS[x.id].cost + ' CP</span></button>').join('');
-  return '<p class="msg">' + msg + '</p><div class="actions">' + btns + '<button class="btn primary" data-act="pass">' + (pr.kind === 'respond' ? 'Let it happen' : 'Continue') + '</button></div>';
+  return '<p class="msg">' + msg + '</p><div class="actions">' + btns + '<button class="btn primary" data-act="pass">' + (pr.kind === 'respond' && announcedMet(G) ? 'Let it happen' : 'Continue') + '</button></div>';
 }
 function defenseView() {
   const G = ui.G, pend = G.pending, def = pend.def, me = G.players[0], att = G.players[pend.attacker];
@@ -323,7 +327,7 @@ function targetBarView() {
 /* while the rival rolls to attack, show their abilities against their dice instead of yours */
 function rivalAbilitiesView() {
   const G = ui.G, op = G.players[1], h = op.hero, faces = G.dice.map(d => d.face);
-  const announced = G.prompt && G.prompt.kind === 'respond' ? G.prompt.abId : null;
+  const announced = announcedMet(G) ? G.prompt.abId : null;
   /* the ability they announced first, then the others their dice already match */
   const rank = ab => ab.id === announced ? 0 : faceMet(h, ab, faces) ? 1 : 2;
   const list = h.abilities.slice().sort((a, b) => rank(a) - rank(b));
@@ -404,7 +408,7 @@ function rulesBody(welcome) {
     '<p>Take your rival from ' + START_HP + ' health to zero. A die roll-off decides who goes first. The four steps of each turn are shown above the dice.</p><ol>' +
     '<li><b>Cards.</b> Gain 1 CP and draw a card (the first player skips this on turn 1). Play Main cards and Upgrades, or sell any card for 1 CP.</li>' +
     '<li><b>Roll.</b> Roll five dice, up to 3 times. Tap a die to KEEP it, then reroll the rest. Roll cards can change dice.</li>' +
-    '<li><b>Ability.</b> Abilities glow gold when your dice match. Press Use. Your rival rolls their defense once, and either of you may answer with cards.</li>' +
+    '<li><b>Ability.</b> Abilities glow gold when your dice match. Press Use: that ends your rolling, and your rival may answer by changing one of your dice. If it no longer matches, you can only use an ability your dice still match. Your rival rolls their defense once, and either of you may answer with cards.</li>' +
     '<li><b>End.</b> Play or sell more cards, then end your turn. Hold 6 cards at most: sell the rest.</li></ol>' +
     '<h3>Card types</h3><ul class="types"><li class="t-main"><b>Main</b> your main phases</li><li class="t-roll"><b>Roll</b> during any roll, yours or your rival&rsquo;s</li><li class="t-instant"><b>Instant</b> whenever the game waits on you</li><li class="t-upgrade"><b>Upgrade</b> improves an ability for good</li></ul>' +
     '<h3>Words to know</h3>' + glossHTML(['CP', 'Defense', 'Ultimate', 'Undefendable', 'Straight', 'Shield', 'Burn', 'Chill']);

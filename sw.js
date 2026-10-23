@@ -1,5 +1,5 @@
 /* Offline support: serve the game from cache, refresh it in the background. build.sh sets VERSION from package.json; a new version forces an update. */
-const VERSION = 'ashes-tides-1.1.0';
+const VERSION = 'ashes-tides-1.1.1';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
