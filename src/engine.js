@@ -21,7 +21,7 @@ const HEROES = {
       { id: 'phoenixRite', name: 'Phoenix Rite', req: { crest: 5 }, ult: true, lv: [{ dmg: 15, burn: 3, heal: 5 }] },
     ],
     defense: {
-      id: 'riposte', name: 'Riposte', lv: [{ n: 4 }, { n: 5 }],
+      id: 'riposte', name: 'Riposte', lv: [{ n: 4 }, { n: 5 }], syms: ['blade', 'flame'],
       text: 'Deal 2 damage back for each Blade. With 2 or more Flame, the attacker gets 1 Burn.',
       resolve(sym) { return { counter: 2 * (sym.blade || 0), burn: (sym.flame || 0) >= 2 ? 1 : 0 }; },
     },
@@ -46,7 +46,7 @@ const HEROES = {
       { id: 'seerGaze', name: "Seer's Gaze", req: { eye: 5 }, ult: true, lv: [{ dmg: 14, chill: 1, heal: 5 }] },
     ],
     defense: {
-      id: 'undertow', name: 'Undertow', lv: [{ n: 4 }, { n: 5 }],
+      id: 'undertow', name: 'Undertow', lv: [{ n: 4 }, { n: 5 }], syms: ['shell', 'pearl'],
       text: 'Prevent 2 damage for each Shell. With 2 or more Pearl, heal 2.',
       resolve(sym) { return { prevent: 2 * (sym.shell || 0), heal: (sym.pearl || 0) >= 2 ? 2 : 0 }; },
     },
@@ -173,7 +173,7 @@ function newGame(opts) {
   const G = {
     rng, rngBox, players, active: 0, start: 0, turnNo: 1, phase: 'main1',
     dice: Array.from({ length: DICE }, () => ({ face: null, held: false })),
-    rolled: 0, rollsLeft: 0, pending: null, prompt: null, winner: null, log: [], fx: [], banner: null, bannerSeq: 0, rolloff: null,
+    rolled: 0, rollsLeft: 0, pending: null, prompt: null, lastHit: null, winner: null, log: [], fx: [], banner: null, bannerSeq: 0, rolloff: null,
   };
   players.forEach(p => draw(G, p.idx, START_HAND));
   // roll-off for the start player
@@ -218,7 +218,7 @@ function checkWin(G) {
 
 function startTurn(G) {
   const pi = G.active, p = G.players[pi];
-  p.bonusDmg = 0; G.rolled = 0; G.rollsLeft = 0; G.pending = null; G.prompt = null;
+  p.bonusDmg = 0; G.rolled = 0; G.rollsLeft = 0; G.pending = null; G.prompt = null; G.lastHit = null;
   G.dice.forEach(d => { d.face = null; d.held = false; });
   Object.assign(log(G, p.hero.name + ' begins turn ' + Math.ceil(G.turnNo / 2) + '.', pi), { kind: 'turn', hp: G.players.map(x => x.hp) });
   // Upkeep
@@ -416,9 +416,12 @@ function resolveAttack(G) {
     const why = parts.length > 1 ? ' (' + parts.join(' ') + ')' : '';
     log(G, pend.name + ' hits ' + op.hero.name + ' for ' + m.hp + why + '.', a);
     banner(G, pend.name + ' hits for ' + m.hp + why);
-    if (pend.reflect) { const r = dealDamage(G, a, pend.reflect); log(G, 'Mirror Pool reflects ' + r.hp + ' at ' + me.hero.name + '.', d); }
-    if (m.counter) { const r = dealDamage(G, a, m.counter); log(G, op.hero.defense.name + ' strikes back at ' + me.hero.name + ' for ' + r.hp + (r.absorbed ? ' (' + r.absorbed + ' blocked by Shield)' : '') + '.', d); }
-    if (m.defHeal) { const h = heal(G, d, m.defHeal); if (h) log(G, op.hero.name + ' heals ' + h + ' from ' + op.hero.defense.name + '.', d); }
+    /* kept until the next turn so the screen can show the defense dice and how the damage added up */
+    const hit = G.lastHit = Object.assign({ attacker: a, defender: d, name: pend.name, ult: pend.ult, undef: pend.undef, reducers: pend.reducers.slice(),
+      defDice: pend.def && pend.def.rolled ? pend.def.dice.map(x => x.face) : null, reflect: 0, counterHp: 0, healed: 0 }, m);
+    if (pend.reflect) { const r = dealDamage(G, a, pend.reflect); hit.reflect = r.hp; log(G, 'Mirror Pool reflects ' + r.hp + ' at ' + me.hero.name + '.', d); }
+    if (m.counter) { const r = dealDamage(G, a, m.counter); hit.counterHp = r.hp; log(G, op.hero.defense.name + ' strikes back at ' + me.hero.name + ' for ' + r.hp + (r.absorbed ? ' (' + r.absorbed + ' blocked by Shield)' : '') + '.', d); }
+    if (m.defHeal) { const h = heal(G, d, m.defHeal); hit.healed = h; if (h) log(G, op.hero.name + ' heals ' + h + ' from ' + op.hero.defense.name + '.', d); }
     if (m.burnBack) { addBurn(G, a, 1); log(G, me.hero.name + ' catches 1 Burn from ' + op.hero.defense.name + '.', d); }
   }
   if (eff.burn) { const b = op.burn; addBurn(G, d, eff.burn); if (op.burn > b) log(G, op.hero.name + ' is burning (' + op.burn + ').', a); }

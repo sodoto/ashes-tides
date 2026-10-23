@@ -124,6 +124,8 @@ button{font:inherit;color:inherit}
 .die .odds{position:absolute;left:0;right:0;bottom:-22px;text-align:center;font:700 12px var(--num);letter-spacing:.06em;color:#b3a186}
 .die.key{box-shadow:0 0 0 3px var(--gold),0 4px 0 var(--bone-lo),0 9px 14px rgba(0,0,0,.45)}
 .die.key .odds{color:var(--gold)}
+.result{display:grid;gap:4px}
+.result .hint{text-align:left}
 
 /* hand */
 .handwrap{position:relative;margin-top:auto}
@@ -332,7 +334,7 @@ const HEROES = {
       { id: 'phoenixRite', name: 'Phoenix Rite', req: { crest: 5 }, ult: true, lv: [{ dmg: 15, burn: 3, heal: 5 }] },
     ],
     defense: {
-      id: 'riposte', name: 'Riposte', lv: [{ n: 4 }, { n: 5 }],
+      id: 'riposte', name: 'Riposte', lv: [{ n: 4 }, { n: 5 }], syms: ['blade', 'flame'],
       text: 'Deal 2 damage back for each Blade. With 2 or more Flame, the attacker gets 1 Burn.',
       resolve(sym) { return { counter: 2 * (sym.blade || 0), burn: (sym.flame || 0) >= 2 ? 1 : 0 }; },
     },
@@ -357,7 +359,7 @@ const HEROES = {
       { id: 'seerGaze', name: "Seer's Gaze", req: { eye: 5 }, ult: true, lv: [{ dmg: 14, chill: 1, heal: 5 }] },
     ],
     defense: {
-      id: 'undertow', name: 'Undertow', lv: [{ n: 4 }, { n: 5 }],
+      id: 'undertow', name: 'Undertow', lv: [{ n: 4 }, { n: 5 }], syms: ['shell', 'pearl'],
       text: 'Prevent 2 damage for each Shell. With 2 or more Pearl, heal 2.',
       resolve(sym) { return { prevent: 2 * (sym.shell || 0), heal: (sym.pearl || 0) >= 2 ? 2 : 0 }; },
     },
@@ -484,7 +486,7 @@ function newGame(opts) {
   const G = {
     rng, rngBox, players, active: 0, start: 0, turnNo: 1, phase: 'main1',
     dice: Array.from({ length: DICE }, () => ({ face: null, held: false })),
-    rolled: 0, rollsLeft: 0, pending: null, prompt: null, winner: null, log: [], fx: [], banner: null, bannerSeq: 0, rolloff: null,
+    rolled: 0, rollsLeft: 0, pending: null, prompt: null, lastHit: null, winner: null, log: [], fx: [], banner: null, bannerSeq: 0, rolloff: null,
   };
   players.forEach(p => draw(G, p.idx, START_HAND));
   // roll-off for the start player
@@ -529,7 +531,7 @@ function checkWin(G) {
 
 function startTurn(G) {
   const pi = G.active, p = G.players[pi];
-  p.bonusDmg = 0; G.rolled = 0; G.rollsLeft = 0; G.pending = null; G.prompt = null;
+  p.bonusDmg = 0; G.rolled = 0; G.rollsLeft = 0; G.pending = null; G.prompt = null; G.lastHit = null;
   G.dice.forEach(d => { d.face = null; d.held = false; });
   Object.assign(log(G, p.hero.name + ' begins turn ' + Math.ceil(G.turnNo / 2) + '.', pi), { kind: 'turn', hp: G.players.map(x => x.hp) });
   // Upkeep
@@ -727,9 +729,12 @@ function resolveAttack(G) {
     const why = parts.length > 1 ? ' (' + parts.join(' ') + ')' : '';
     log(G, pend.name + ' hits ' + op.hero.name + ' for ' + m.hp + why + '.', a);
     banner(G, pend.name + ' hits for ' + m.hp + why);
-    if (pend.reflect) { const r = dealDamage(G, a, pend.reflect); log(G, 'Mirror Pool reflects ' + r.hp + ' at ' + me.hero.name + '.', d); }
-    if (m.counter) { const r = dealDamage(G, a, m.counter); log(G, op.hero.defense.name + ' strikes back at ' + me.hero.name + ' for ' + r.hp + (r.absorbed ? ' (' + r.absorbed + ' blocked by Shield)' : '') + '.', d); }
-    if (m.defHeal) { const h = heal(G, d, m.defHeal); if (h) log(G, op.hero.name + ' heals ' + h + ' from ' + op.hero.defense.name + '.', d); }
+    /* kept until the next turn so the screen can show the defense dice and how the damage added up */
+    const hit = G.lastHit = Object.assign({ attacker: a, defender: d, name: pend.name, ult: pend.ult, undef: pend.undef, reducers: pend.reducers.slice(),
+      defDice: pend.def && pend.def.rolled ? pend.def.dice.map(x => x.face) : null, reflect: 0, counterHp: 0, healed: 0 }, m);
+    if (pend.reflect) { const r = dealDamage(G, a, pend.reflect); hit.reflect = r.hp; log(G, 'Mirror Pool reflects ' + r.hp + ' at ' + me.hero.name + '.', d); }
+    if (m.counter) { const r = dealDamage(G, a, m.counter); hit.counterHp = r.hp; log(G, op.hero.defense.name + ' strikes back at ' + me.hero.name + ' for ' + r.hp + (r.absorbed ? ' (' + r.absorbed + ' blocked by Shield)' : '') + '.', d); }
+    if (m.defHeal) { const h = heal(G, d, m.defHeal); hit.healed = h; if (h) log(G, op.hero.name + ' heals ' + h + ' from ' + op.hero.defense.name + '.', d); }
     if (m.burnBack) { addBurn(G, a, 1); log(G, me.hero.name + ' catches 1 Burn from ' + op.hero.defense.name + '.', d); }
   }
   if (eff.burn) { const b = op.burn; addBurn(G, d, eff.burn); if (op.burn > b) log(G, op.hero.name + ' is burning (' + op.burn + ').', a); }
@@ -1040,7 +1045,7 @@ if (typeof module !== 'undefined' && module.exports) {
 /* ===== UI ===== */
 const $app = document.getElementById('app');
 const $toast = document.getElementById('toast');
-const GAME_VERSION = '1.1.1'; /* filled in by build.sh from package.json */
+const GAME_VERSION = '1.2.0'; /* filled in by build.sh from package.json */
 
 const ICONS = {
   blade: '<path d="M19 5 9.5 14.5" stroke-width="3.2"/><path d="m6.5 12.5 5 5"/><path d="M8.5 15.5 5 19"/>',
@@ -1173,6 +1178,30 @@ function defSummary(d) {
   if (d.burn) t.push('gives 1 Burn');
   return t.length ? t.join(', ') : 'no effect';
 }
+/* how the last hit added up, shown under the dice for the rest of the attacker's turn */
+function hitSummaryView(G) {
+  const hit = G.lastHit;
+  if (!hit || !(G.phase === 'main2' || G.phase === 'discard')) return '';
+  const def = G.players[hit.defender], dh = def.hero, dn = dh.defense.name;
+  const who = hit.defender === 0 ? 'you' : 'Rival';
+  const sym = hit.defDice ? symCounts(dh, hit.defDice) : {};
+  const n = s => (sym[s] || 0) + ' ' + SYMNAME[s];
+  const eq = [hit.base + ' dmg'];
+  if (hit.bonus) eq.push('+ ' + hit.bonus + ' Boost');
+  if (hit.cards) eq.push('− ' + hit.cards + ' ' + hit.reducers.join(' & '));
+  if (hit.defense) eq.push('− ' + hit.defense + ' ' + dn + ' (' + n(dh.defense.syms[0]) + ')');
+  if (hit.shield) eq.push('− ' + hit.shield + ' Shield');
+  const extra = [];
+  if (hit.ult) extra.push('Ultimate: it can&rsquo;t be defended or reduced.');
+  else if (!hit.defDice) extra.push('Undefendable: no defense roll.');
+  if (hit.counterHp || hit.counter) extra.push(dn + ' struck back for ' + hit.counterHp + ' (' + n(dh.defense.syms[0]) + ').');
+  if (hit.healed) extra.push(dn + ' healed ' + hit.healed + ' (' + n(dh.defense.syms[1]) + ').');
+  if (hit.burnBack) extra.push(dn + ' gave 1 Burn (' + n(dh.defense.syms[1]) + ').');
+  if (hit.reflect) extra.push('Mirror Pool reflected ' + hit.reflect + '.');
+  if (hit.defDice && !hit.defense && !hit.counter && !hit.healed && !hit.burnBack) extra.push(dn + ' rolled nothing useful (' + dh.defense.syms.map(n).join(', ') + ').');
+  return '<div class="result"><p class="msg"><b>' + hit.name + '</b> hit ' + who + ' for <b>' + hit.hp + '</b>' + (eq.length > 1 ? ': ' + eq.join(' ') + ' = ' + hit.hp : '') + '.</p>' +
+    (extra.length ? '<p class="hint">' + extra.join(' ') + '</p>' : '') + '</div>';
+}
 function showToast(text) {
   if (!text) return;
   $toast.textContent = text; $toast.classList.add('show');
@@ -1233,6 +1262,13 @@ function logView() {
   return '<div class="logrow"><button class="logline" data-act="log" aria-label="Open history">' + last.map(l => '<span>' + l.t + '</span>').join('') + '</button><button class="menubtn hist-btn" data-act="log">History</button><button class="menubtn" data-act="menu">Menu</button></div>';
 }
 function trayModel(G) {
+  /* after a hit, the defense dice stay on the table for the rest of the turn */
+  if ((G.phase === 'main2' || G.phase === 'discard') && G.lastHit && G.lastHit.defDice) {
+    const hit = G.lastHit, syms = G.players[hit.defender].hero.defense.syms;
+    /* outline only the symbols that did something: the first prevents or strikes back, the second heals or burns */
+    const counted = (hit.defense || hit.counter ? [syms[0]] : []).concat(hit.defHeal || hit.burnBack ? [syms[1]] : []);
+    return { owner: hit.defender, def: true, result: true, counted, dice: hit.defDice.map(f => ({ face: f })) };
+  }
   if (G.phase === 'defense' && G.pending && G.pending.def) {
     const def = G.pending.def, owner = G.pending.defender;
     return { owner, def: true, dice: def.rolled ? def.dice : Array.from({ length: def.n }, () => ({ face: null })), skip: def.skip };
@@ -1250,14 +1286,16 @@ function trayView() {
   const dice = tm.dice.map((d, i) => {
     const sym = d.face == null ? null : h.faces[d.face];
     const held = d.held && !odds, o = odds ? odds[i] : 0;
-    const cls = 'die' + (sym ? '' : ' blank') + (held ? ' held' : '') + (ui.rolling.has(i) ? ' tumble' : '') + (tgt && sym ? ' tgt' : '') + (tgt && ui.target.picks.indexOf(i) >= 0 ? ' pick' : '') + (o && o === best ? ' key' : '');
+    const counted = tm.result && tm.counted.indexOf(sym) >= 0;
+    const cls = 'die' + (sym ? '' : ' blank') + (held ? ' held' : '') + (ui.rolling.has(i) ? ' tumble' : '') + (tgt && sym ? ' tgt' : '') + (tgt && ui.target.picks.indexOf(i) >= 0 ? ' pick' : '') + ((o && o === best) || counted ? ' key' : '');
     const live = canHold || (tgt && sym);
     return '<button class="' + cls + '" data-act="die" data-i="' + i + '"' + (live ? '' : ' disabled') + ' aria-label="Die ' + (i + 1) + (sym ? ', ' + SYMNAME[sym] + ' ' + (d.face + 1) : ', not rolled') + (held ? ', kept' : '') + (odds ? ', a reroll helps you ' + o + ' times in 6' : '') + '">' +
       (sym ? ic(sym, 40) + '<span class="num">' + (d.face + 1) + '</span>' : '') + (held ? '<span class="keep">KEEP</span>' : '') + (odds ? '<span class="odds">' + o + '/6</span>' : '') + '</button>';
   }).join('');
   const whoTxt = tm.owner === 0 ? 'Your' : 'Rival&rsquo;s';
   let label = whoTxt + ' dice', pips = '';
-  if (tm.def) label = whoTxt + ' defense &middot; ' + h.defense.name + (tm.skip ? ' (skipped)' : ' &middot; ' + tm.dice.length + ' dice, 1 roll');
+  if (tm.result) label = whoTxt + ' defense &middot; ' + h.defense.name + ' &middot; result';
+  else if (tm.def) label = whoTxt + ' defense &middot; ' + h.defense.name + (tm.skip ? ' (skipped)' : ' &middot; ' + tm.dice.length + ' dice, 1 roll');
   else if (G.phase === 'roll') { for (let k = 0; k < 3; k++) pips += '<i class="pip' + (k < G.rollsLeft ? ' on' : '') + '"></i>'; }
   return '<section class="table' + (tm.def ? ' defmode' : '') + '" style="--dink:' + h.ink + ';--hc:' + h.color + '">' + stepsView() +
     '<div class="tlabel"><span>' + label + '</span><span class="pips" aria-label="Rolls left">' + pips + '</span></div>' +
@@ -1280,7 +1318,7 @@ function waitView() {
   else if (G.phase === 'roll') t = G.rolled ? 'Rival is choosing…' : 'Rival is rolling…';
   else if (G.phase === 'main1' || G.phase === 'main2') t = 'Rival is playing cards…';
   else if (G.phase === 'discard') t = 'Rival is selling cards…';
-  return '<div class="actions wait">' + t + '</div>';
+  return hitSummaryView(G) + '<div class="actions wait">' + t + '</div>';
 }
 function respondCards(G) {
   const me = G.players[0];
@@ -1342,10 +1380,10 @@ function actionsView() {
     const hint = G.rolled === 0 ? 'Roll all five dice. You get up to 3 rolls.' : left > 0 ? (av.length ? 'Gold abilities are ready. Use one now, or tap dice to keep them and reroll.' : 'Nothing matches yet. Tap the dice you want to keep, then reroll.') : (av.length ? 'No rolls left. Pick an ability.' : 'No rolls left and nothing matches.');
     return '<div class="actions">' + rollBtn + use + '</div><p class="hint">' + hint + '</p>';
   }
-  if (G.phase === 'main2') return '<div class="actions"><button class="btn primary" data-act="endturn">End turn</button></div><p class="hint">Play more cards, or sell cards you don&rsquo;t need for 1 CP each.</p>';
+  if (G.phase === 'main2') return hitSummaryView(G) + '<div class="actions"><button class="btn primary" data-act="endturn">End turn</button></div><p class="hint">Play more cards, or sell cards you don&rsquo;t need for 1 CP each.</p>';
   if (G.phase === 'discard') {
     const extra = G.players[0].hand.length - HAND_LIMIT;
-    return '<p class="msg">Your hand is over the limit of ' + HAND_LIMIT + '. Sell <b>' + extra + '</b> more card' + (extra > 1 ? 's' : '') + ' for 1 CP each: tap a card, then Sell.</p>';
+    return hitSummaryView(G) + '<p class="msg">Your hand is over the limit of ' + HAND_LIMIT + '. Sell <b>' + extra + '</b> more card' + (extra > 1 ? 's' : '') + ' for 1 CP each: tap a card, then Sell.</p>';
   }
   return '';
 }
@@ -1547,7 +1585,10 @@ async function drive() {
     for (;;) {
       const G = ui.G;
       if (!G || !needsAI(G)) break;
-      await sleep(G.prompt ? 700 : G.phase === 'defense' ? 1000 : G.phase === 'roll' && G.rolled > 0 ? 1100 : 750);
+      /* linger after a hit so its result can be read before the rival moves on */
+      const fresh = G.phase === 'main2' && G.lastHit && ui.hitShown !== G.lastHit;
+      if (fresh) ui.hitShown = G.lastHit;
+      await sleep(fresh ? 2600 : G.prompt ? 700 : G.phase === 'defense' ? 1000 : G.phase === 'roll' && G.rolled > 0 ? 1100 : 750);
       if (ui.G !== G || !needsAI(G)) break;
       const r = aiAct(G);
       if (!r) break;
